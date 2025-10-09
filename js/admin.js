@@ -1,3 +1,4 @@
+// /js/admin.js
 (async () => {
   const supabase = sb.client;
 
@@ -17,25 +18,12 @@
   const copyBoardBtn = document.getElementById("copy-board");
 
   const setMsg = (m) => authMsg.textContent = m ?? "";
-  const showDash = (show) => {
-    authPanel.classList.toggle("hidden", show);
-    dashPanel.classList.toggle("hidden", !show);
-  };
+  const showDash = (show) => { authPanel.classList.toggle("hidden", show); dashPanel.classList.toggle("hidden", !show); };
 
   const getSession = async () => (await supabase.auth.getSession()).data.session;
-
-  const signIn = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-  };
-  const signUp = async (email, password) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-  };
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  };
+  const signIn = async (email, password) => { const { error } = await supabase.auth.signInWithPassword({ email, password }); if (error) throw error; };
+  const signUp = async (email, password) => { const { error } = await supabase.auth.signUp({ email, password }); if (error) throw error; };
+  const signOut = async () => { const { error } = await supabase.auth.signOut(); if (error) throw error; };
 
   const statusButtons = (room) => {
     const wrap = document.createElement("div");
@@ -49,11 +37,7 @@
         try {
           const { error } = await supabase.from("rooms").update({ status: s }).eq("id", room.id);
           if (error) throw error;
-        } catch (e) {
-          alert(`Update failed: ${e.message}`);
-        } finally {
-          b.disabled = false;
-        }
+        } catch (e) { alert(`Update failed: ${e.message}`); } finally { b.disabled = false; }
       };
       wrap.appendChild(b);
     });
@@ -133,11 +117,11 @@
     if (sess) await loadMyRooms();
   });
 
-  // Polling fallback (always on)
+  // Poll every 10s so it works even without realtime
   const POLL_MS = 10_000;
-  let pollTimer = setInterval(loadMyRooms, POLL_MS);
+  setInterval(loadMyRooms, POLL_MS);
 
-  // Try realtime (optional)
+  // Optional realtime
   try {
     const channel = supabase
       .channel("my-rooms")
@@ -146,7 +130,6 @@
         const card = document.getElementById(`myroom-${row.id}`);
         if (!card) return;
         if (payload.eventType === "DELETE") { card.remove(); return; }
-
         const current = payload.new;
         card.querySelector(".status-dot").className = `status-dot ${sb.dotClass(current.status)}`;
         const badge = card.querySelector(".badge");
@@ -154,47 +137,6 @@
         badge.textContent = `${sb.statusEmoji(current.status)} ${sb.statusLabel(current.status)}`;
         card.querySelector(".updated").textContent = `Updated: ${sb.formatTime(current.updated_at)}`;
       })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          console.log("Realtime ON for my-rooms");
-        }
-      });
-
-    window.addEventListener("beforeunload", () => {
-      try { supabase.removeChannel(channel); } catch {}
-      clearInterval(pollTimer);
-    });
-  } catch {
-  }
-
-  // Auth form
-  signinForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    signinBtn.disabled = true;
-    setMsg("Signing in…");
-    try {
-      await signIn(emailEl.value.trim(), passEl.value.trim());
-      setMsg("");
-      emailEl.value = ""; passEl.value = "";
-    } catch (err) {
-      setMsg(err.message);
-    } finally {
-      signinBtn.disabled = false;
-    }
-  });
-
-  signupBtn.addEventListener("click", async () => {
-    signupBtn.disabled = true;
-    setMsg("Creating account…");
-    try {
-      await signUp(emailEl.value.trim(), passEl.value.trim());
-      setMsg("Account created. Check your email if confirmation is enabled, then sign in.");
-    } catch (err) {
-      setMsg(err.message);
-    } finally {
-      signupBtn.disabled = false;
-    }
-  });
-
-  signoutBtn.addEventListener("click", async () => { await signOut(); });
+      .subscribe();
+  } catch {}
 })();
