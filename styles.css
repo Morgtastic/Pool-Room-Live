@@ -1,0 +1,50 @@
+:root{
+  --bg:#0e0f12; --card:#15171c; --muted:#9aa0a6; --text:#e8eaed; --green:#2ecc71; --yellow:#f1c40f; --red:#e74c3c;
+  --ring:#3b82f6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+.container{max-width:900px;margin:0 auto;padding:16px}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #23252b;background:#0c0d10;position:sticky;top:0;z-index:5}
+h1{font-size:1.25rem;margin:0}
+h2{margin:0 0 .5rem 0}
+h3{margin:.25rem 0}
+.muted{color:var(--muted)}
+.link{color:#8ab4f8;text-decoration:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.card{background:var(--card);padding:14px;border-radius:12px;border:1px solid #23252b}
+.row{display:flex;gap:8px;align-items:center}
+.wrap{flex-wrap:wrap}
+.between{justify-content:space-between}
+.vstack{display:flex;flex-direction:column}
+.gap{gap:12px}
+.hidden{display:none}
+.btn{background:#23252b;border:1px solid #2f323a;color:var(--text);padding:10px 12px;border-radius:10px;cursor:pointer}
+.btn:focus{outline:2px solid var(--ring)}
+.btn.primary{background:#1f2937;border-color:#374151}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-weight:600}
+.badge.green{background:rgba(46,204,113,.15);border:1px solid rgba(46,204,113,.35)}
+.badge.yellow{background:rgba(241,196,15,.15);border:1px solid rgba(241,196,15,.35)}
+.badge.red{background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.35)}
+.status-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.status-btn{padding:14px 8px;border-radius:12px;font-weight:700}
+.status-btn.green{border:2px solid var(--green)}
+.status-btn.yellow{border:2px solid var(--yellow)}
+.status-btn.red{border:2px solid var(--red)}
+.updated{font-size:.85rem;color:var(--muted)}
+.input{background:#0f1116;border:1px solid #2f323a;color:var(--text);padding:10px 12px;border-radius:10px;min-width:260px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.qr{background:#fff;border-radius:8px;padding:8px}
+
+.status-dot{width:10px;height:10px;border-radius:50%}
+.dot-green{background:var(--green)}
+.dot-yellow{background:var(--yellow)}
+.dot-red{background:var(--red)}
+
+.room-card h3{display:flex;gap:8px;align-items:center;margin:0 0 8px 0}
+
+.foot{padding:20px;color:var(--muted);text-align:center}
+
+@media (pointer:coarse){
+  .status-btn{padding:18px 10px}
+}

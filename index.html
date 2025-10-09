@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pool Rooms — Live Board</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="./styles.css" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="./js/supabaseClient.js"></script>
+  <script defer src="./js/publicBoard.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Pool Rooms — Live Board</h1>
+    <a class="link" href="./admin.html">Owner Sign-In</a>
+  </header>
+
+  <main class="container" id="board">
+    <div id="board-status" class="muted">Loading rooms…</div>
+    <div id="rooms" class="grid"></div>
+  </main>
+
+  <footer class="foot">
+    <span>Auto-refresh every 10s. Realtime turns on automatically if available.</span>
+  </footer>
+</body>
+</html>

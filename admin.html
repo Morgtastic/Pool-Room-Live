@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pool Rooms — Owner Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="./styles.css" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script defer src="./js/supabaseClient.js"></script>
+  <script defer src="./js/admin.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Owner Dashboard</h1>
+    <a class="link" href="./index.html">View Live Board</a>
+  </header>
+
+  <main class="container" id="app">
+    <!-- Auth Panel -->
+    <section id="auth-panel" class="card">
+      <h2>Sign In</h2>
+      <form id="signin-form" class="vstack">
+        <input id="email" type="email" placeholder="Email" autocomplete="email" required />
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
+        <button id="signin-btn" type="submit" class="btn primary">Sign In</button>
+        <button id="signup-btn" type="button" class="btn">Create Account</button>
+        <div id="auth-msg" class="muted"></div>
+      </form>
+    </section>
+
+    <!-- Dashboard Panel -->
+    <section id="dash-panel" class="hidden">
+      <div class="row between">
+        <h2>Your Rooms</h2>
+        <button id="signout-btn" class="btn">Sign Out</button>
+      </div>
+
+      <div id="rooms-wrap" class="vstack gap"></div>
+
+      <div class="card">
+        <h3>Share the Public Live Board</h3>
+        <p class="muted">This QR opens <code>index.html</code> (all rooms).</p>
+        <canvas id="qr-board" class="qr"></canvas>
+        <div class="row wrap">
+          <input id="board-link" class="mono input" readonly />
+          <button id="copy-board" class="btn">Copy Link</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Tip: Print the QR and post it by the counter.</span>
+  </footer>
+</body>
+</html>
