@@ -1,6 +1,6 @@
 // /js/supabaseClient.js
 const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co"; // ← yours
-const SUPABASE_ANON_KEY = "PASTE-YOUR-ANON-KEY";                  // ← from Supabase → Settings → API
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXdlYW5oeHh3bHZubWlzYmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMjUxMjksImV4cCI6MjA3NTYwMTEyOX0.FaQeS9jH3WFgFGkSipjaj3lgPdm5Xoo-hGikXzWRqvg";                  // ← from Supabase → Settings → API
 
 if (SUPABASE_URL.includes("YOUR-PROJECT-REF")) {
   console.warn("Configure SUPABASE_URL and SUPABASE_ANON_KEY in /js/supabaseClient.js");
