@@ -1,3 +1,4 @@
+// /js/publicBoard.js
 (async () => {
   const supabase = sb.client;
   const roomsEl = document.getElementById("rooms");
@@ -39,25 +40,16 @@
 
   const fetchRooms = async () => {
     boardStatus.textContent = "Loading rooms…";
-    const match = focusRoom
-      ? { or: `public_slug.eq.${focusRoom},id.eq.${focusRoom}` }
-      : {};
+    const match = focusRoom ? { or: `public_slug.eq.${focusRoom},id.eq.${focusRoom}` } : {};
     const { data, error } = await supabase
       .from("rooms")
       .select("id,name,status,public_slug,updated_at")
       .order("name", { ascending: true })
       .match(match);
 
-    if (error) {
-      boardStatus.textContent = `Error loading rooms: ${error.message}`;
-      return [];
-    }
-
+    if (error) { boardStatus.textContent = `Error loading rooms: ${error.message}`; return []; }
     roomsEl.innerHTML = "";
-    if (!data || data.length === 0) {
-      boardStatus.textContent = "No rooms found.";
-      return [];
-    }
+    if (!data || data.length === 0) { boardStatus.textContent = "No rooms found."; return []; }
     boardStatus.textContent = focusRoom ? "Showing 1 room" : `Showing ${data.length} rooms`;
     data.forEach(upsertCard);
     return data;
@@ -65,9 +57,11 @@
 
   await fetchRooms();
 
+  // Poll every 10s so it works even without realtime
   const POLL_MS = 10_000;
-  let pollTimer = setInterval(fetchRooms, POLL_MS);
+  setInterval(fetchRooms, POLL_MS);
 
+  // Optional realtime (if your project supports it)
   try {
     const channel = supabase
       .channel("rooms-stream")
@@ -81,16 +75,6 @@
         if (focusRoom && !(row.public_slug === focusRoom || row.id === focusRoom)) return;
         upsertCard(row);
       })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          boardStatus.textContent += " · Live updates ON";
-        }
-      });
-
-    window.addEventListener("beforeunload", () => {
-      try { supabase.removeChannel(channel); } catch {}
-      clearInterval(pollTimer);
-    });
-  } catch {
-  }
+      .subscribe((status) => { if (status === "SUBSCRIBED") boardStatus.textContent += " · Live updates ON"; });
+  } catch {}
 })();
