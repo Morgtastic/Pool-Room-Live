@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Auth Diagnostics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="../js/supabaseClient.js"></script>
+</head>
+<body style="font-family:system-ui;max-width:760px;margin:24px auto;padding:16px">
+  <h1>Auth Diagnostics</h1>
+
+  <section style="margin:12px 0">
+    <h3>Environment</h3>
+    <pre id="env" style="background:#111;color:#eee;padding:12px;border-radius:8px"></pre>
+  </section>
+
+  <section style="margin:12px 0">
+    <h3>Check current session</h3>
+    <button id="check">Check Session</button>
+    <pre id="session" style="background:#111;color:#eee;padding:12px;border-radius:8px;white-space:pre-wrap"></pre>
+  </section>
+
+  <section style="margin:12px 0">
+    <h3>Test sign-in (password)</h3>
+    <form id="signin" style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="email" type="email" placeholder="owner@example.com" required style="flex:1;padding:10px;border:1px solid #ccc;border-radius:8px"/>
+      <input id="password" type="password" placeholder="password" required style="flex:1;padding:10px;border:1px solid #ccc;border-radius:8px"/>
+      <button>Sign In</button>
+    </form>
+    <pre id="signin-out" style="background:#111;color:#eee;padding:12px;border-radius:8px;white-space:pre-wrap"></pre>
+  </section>
+
+  <script>
+    const outEnv = document.getElementById('env');
+    const outSess = document.getElementById('session');
+    const outSign = document.getElementById('signin-out');
+
+    (async () => {
+      outEnv.textContent = [
+        `URL: ${typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '(missing)'}`,
+        `Anon key present: ${typeof SUPABASE_ANON_KEY !== 'undefined' && !SUPABASE_ANON_KEY.includes('YOUR-ANON-KEY')}`
+      ].join('\n');
+    })();
+
+    document.getElementById('check').onclick = async () => {
+      const { data, error } = await sb.client.auth.getSession();
+      outSess.textContent = error ? ('ERROR: ' + error.message) :
+        JSON.stringify({
+          hasSession: !!data.session,
+          userId: data.session?.user?.id,
+          email: data.session?.user?.email,
+          expiresAt: data.session?.expires_at
+        }, null, 2);
+    };
+
+    document.getElementById('signin').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      outSign.textContent = 'Signing in…';
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const { data, error } = await sb.client.auth.signInWithPassword({ email, password });
+      if (error) { outSign.textContent = 'ERROR: ' + error.message; return; }
+      outSign.textContent = 'OK: signed in\n' + JSON.stringify({
+        userId: data.user?.id, email: data.user?.email
+      }, null, 2);
+    });
+  </script>
+</body>
+</html>
