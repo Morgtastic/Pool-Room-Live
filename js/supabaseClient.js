@@ -1,6 +1,6 @@
 // /js/supabaseClient.js  (PLAIN JS — no <script> tags, no SQL)
 const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co";  // ← your project URL
-const SUPABASE_ANON_KEY = "PASTE-YOUR-ANON-KEY-HERE";             // ← Settings → API → Anonymous public
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXdlYW5oeHh3bHZubWlzYmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMjUxMjksImV4cCI6MjA3NTYwMTEyOX0.FaQeS9jH3WFgFGkSipjaj3lgPdm5Xoo-hGikXzWRqvg";             // ← Settings → API → Anonymous public
 
 if (!window.supabase) {
   console.error("Supabase SDK not loaded. Check the script tag for @supabase/supabase-js@2 in your HTML.");
