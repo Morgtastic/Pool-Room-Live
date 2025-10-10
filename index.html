@@ -1,144 +1,128 @@
-<!-- FILE: index.html (replace fully) -->
+<!-- FILE: /index.html (REPLACE ENTIRE FILE) -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Pool Room — Live Board</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="./styles.css" rel="stylesheet" />
 
-<!-- Supabase SDK (UMD) -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Minimal styles -->
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --br:#1f2937; }
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:var(--text)}
+    a{color:#e5e7eb;text-decoration:none}
+    .container{max-width:900px;margin:24px auto;padding:12px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111827;border-bottom:1px solid var(--br)}
+    .card{background:#111827;border:1px solid var(--br);border-radius:12px;padding:16px;margin:12px 0}
+    .muted{color:var(--muted)} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .row{display:flex;gap:8px;align-items:center} .between{justify-content:space-between}
+    .status-dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:6px;vertical-align:middle}
+    .dot-green{background:#16a34a}.dot-yellow{background:#f59e0b}.dot-red{background:#ef4444}
+    .badge{padding:6px 10px;border-radius:999px;border:1px solid #334155}
+    .updated{margin-top:6px;color:var(--muted);font-size:0.9rem}
+  </style>
 
-<!-- Your shared client file, from the repo root -->
-<script defer src="./js/supabaseClient.js?v=12"></script>
+  <!-- Supabase SDK (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
-<script>
-  if (!window.sb) window.sb = {};
-  if (!sb.client) {
-    const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co";  // your project URL
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXdlYW5oeHh3bHZubWlzYmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMjUxMjksImV4cCI6MjA3NTYwMTEyOX0.FaQeS9jH3WFgFGkSipjaj3lgPdm5Xoo-hGikXzWRqvg";                                // your anon key
-    try {
-      sb.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-      });
-      console.log("[index] fallback client created");
-    } catch (e) {
-      console.error("[index] fallback createClient failed:", e);
-    }
-  }
-</script>
-
-
-
-<script>
-  // Delay the banner until SDK/client have had a chance to init
-  (async () => {
-    const wait = (ms) => new Promise(r => setTimeout(r, ms));
-    let waited = 0;
-    while (waited < 6000 && (!window.supabase || !window.sb || !sb.client)) {
-      await wait(300);
-      waited += 300;
-    }
-    if (!window.supabase) {
-      const b = document.createElement('div');
-      b.style.cssText="position:fixed;left:0;right:0;top:0;background:#b00020;color:#fff;padding:10px 14px;font:14px system-ui;z-index:99999";
-      b.textContent="Supabase SDK missing. Check /vendor/supabase-global.js tag.";
-      document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
-    } else if (!window.sb || !sb.client) {
-      const b = document.createElement('div');
-      b.style.cssText="position:fixed;left:0;right:0;top:0;background:#b00020;color:#fff;padding:10px 14px;font:14px system-ui;z-index:99999";
-      b.textContent="Supabase client missing. Check /js/supabaseClient.js and your anon key.";
-      document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
-    }
-  })();
-</script>
-
-
-  <!-- Fail-fast banner if SDK/client missing (why: avoid silent "Loading Rooms…") -->
+  <!-- Inline client (EDIT THESE TWO LINES) -->
   <script>
-    function banner(msg){
-      var b=document.createElement('div');
-      b.style.cssText="position:fixed;left:0;right:0;top:0;background:#b00020;color:#fff;padding:10px 14px;font:14px system-ui;z-index:99999";
-      b.textContent=msg;
-      document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
-    }
-    if (!window.supabase) banner("Supabase SDK missing. Ensure /vendor/supabase-global.js is included with type='module'.");
-    if (!window.sb || !window.sb.client) banner("Supabase client missing. Ensure /js/supabaseClient.js loads after the SDK.");
+    const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co";      // <-- YOUR URL
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXdlYW5oeHh3bHZubWlzYmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMjUxMjksImV4cCI6MjA3NTYwMTEyOX0.FaQeS9jH3WFgFGkSipjaj3lgPdm5Xoo-hGikXzWRqvg"; // <-- YOUR anon key
+
+    window.sb = window.sb || {};
+    sb.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+    // helpers
+    sb.statusLabel = (s)=>({green:"Open / No wait",yellow:"Moderate wait",red:"Full / Busy"}[s]??s);
+    sb.statusEmoji = (s)=>({green:"🟢",yellow:"🟡",red:"🔴"}[s]??"❓");
+    sb.dotClass    = (s)=>({green:"dot-green",yellow:"dot-yellow",red:"dot-red"}[s]??"dot-red");
+    sb.formatTime  = (iso)=>{ try{return new Date(iso).toLocaleString();}catch{return"";} };
   </script>
 </head>
 <body>
   <header class="topbar">
     <h1>Live Board</h1>
-    <div class="row">
-      <a class="link" href="./admin.html">Owner Dashboard</a>
-    </div>
+    <!-- Link to your WORKING admin single-file -->
+    <a class="link" href="./tools/onefile-admin.html">Owner Dashboard</a>
   </header>
 
   <main class="container">
-    <div class="card">
-      <h2>Status</h2>
-      <div class="muted" id="legend">
-        🟢 Open / No wait &nbsp;•&nbsp; 🟡 Moderate wait &nbsp;•&nbsp; 🔴 Full / Busy
-      </div>
-    </div>
-
-    <div id="status-msg" class="muted mono" style="margin:8px 0">Loading Rooms…</div>
-    <div id="rooms" class="vstack gap"></div>
+    <div class="card"><h2>Status</h2><div class="muted">🟢 Open • 🟡 Moderate wait • 🔴 Full</div></div>
+    <div id="status" class="muted mono">Loading Rooms…</div>
+    <div id="rooms"></div>
   </main>
 
   <script>
-  (function(){
-    // Stop if SDK/client are missing; banners above explain.
-    if (!window.supabase || !window.sb || !sb.client) return;
+    (function(){
+      const statusEl = document.getElementById('status');
+      const roomsEl  = document.getElementById('rooms');
 
-    const supabase = sb.client;
-    const roomsEl  = document.getElementById('rooms');
-    const msgEl    = document.getElementById('status-msg');
+      const dot = (s)=>`<span class="status-dot ${sb.dotClass(s)}"></span>`;
+      const cardHtml = (r)=>`
+        <div class="card" data-id="${r.id}">
+          <div class="row between">
+            <h3>${dot(r.status)} ${r.name}</h3>
+            <span class="badge ${r.status}">${sb.statusEmoji(r.status)} ${sb.statusLabel(r.status)}</span>
+          </div>
+          <div class="updated">Updated: ${sb.formatTime(r.updated_at)}</div>
+        </div>`;
 
-    const dotClass = (s) => sb.dotClass(s);
-    const label    = (s) => `${sb.statusEmoji(s)} ${sb.statusLabel(s)}`;
-
-    // Optional filter: /index.html?room=<public_slug>
-    const params = new URLSearchParams(location.search);
-    const filterSlug = params.get('room')?.trim() || null;
-
-    function setMsg(t){ msgEl.textContent = t || ""; }
-    function card(room){
-      const div = document.createElement('div');
-      div.className = 'card';
-      div.dataset.roomId = room.id;
-      div.innerHTML = `
-        <div class="row between">
-          <h3><span class="status-dot ${dotClass(room.status)}"></span> ${room.name}</h3>
-          <span class="badge ${room.status}">${label(room.status)}</span>
-        </div>
-        <div class="updated">Updated: ${sb.formatTime(room.updated_at)}</div>
-      `;
-      return div;
-    }
-
-    function render(list){
-      roomsEl.innerHTML = "";
-      if (!list || list.length === 0) {
-        setMsg(filterSlug ? "No matching room." : "No rooms yet.");
-        return;
+      function render(list){
+        roomsEl.innerHTML = "";
+        if (!list || !list.length){
+          statusEl.textContent = "No rooms yet.";
+          return;
+        }
+        statusEl.textContent = "";
+        roomsEl.innerHTML = list.map(cardHtml).join("");
       }
-      setMsg("");
-      list.forEach(r => roomsEl.appendChild(card(r)));
-    }
 
-    async function load(){
-      try {
-        setMsg("Loading Rooms…");
-        let q = supabase.from('rooms')
-          .select('id,name,status,public_slug,updated_at')
-          .order('name', { ascending: true });
-        if (filterSlug) q = q.eq('public_slug', filterSlug);
-
+      async function load(){
+        // optional single-room filter: ?room=public_slug
+        const slug = new URLSearchParams(location.search).get('room')?.trim();
+        let q = sb.client.from('rooms').select('id,name,status,public_slug,updated_at').order('name',{ascending:true});
+        if (slug) q = q.eq('public_slug', slug);
         const { data, error } = await q;
-        if (error) { setMsg("Error: " + error.message); console.error("[LiveBoard] SELECT error:", error); return; }
+        if (error){ statusEl.textContent = "Error: "+error.message; return; }
         render(data);
-      } catch (e) {
-        setMsg("Error: " + (e?.message || e));
-        console.error("[LiveBoard] exception:", e);
+      }
+
+      function subscribe(){
+        const slug = new URLSearchParams(location.search).get('room')?.trim();
+        sb.client
+          .channel('rooms_live_board')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, (p)=>{
+            const r = p.new || p.old;
+            if (slug && r.public_slug !== slug) return;
+
+            if (p.eventType === 'DELETE'){
+              const n = roomsEl.querySelector(`[data-id="${r.id}"]`); if (n) n.remove();
+              if (!roomsEl.children.length) statusEl.textContent = slug ? "No matching room." : "No rooms yet.";
+              return;
+            }
+            if (p.eventType === 'INSERT'){
+              roomsEl.insertAdjacentHTML('beforeend', cardHtml(p.new));
+              statusEl.textContent = "";
+              return;
+            }
+            if (p.eventType === 'UPDATE'){
+              let n = roomsEl.querySelector(`[data-id="${r.id}"]`);
+              if (!n){ roomsEl.insertAdjacentHTML('beforeend', cardHtml(p.new)); statusEl.textContent=""; return; }
+              n.querySelector('.status-dot').className = `status-dot ${sb.dotClass(p.new.status)}`;
+              const b = n.querySelector('.badge'); b.className = `badge ${p.new.status}`; b.textContent = `${sb.statusEmoji(p.new.status)} ${sb.statusLabel(p.new.status)}`;
+              n.querySelector('.updated').textContent = "Updated: " + sb.formatTime(p.new.updated_at);
+            }
+          })
+          .subscribe();
+      }
+
+      load();
+      subscribe();
+      setInterval(load, 20000);
+    })();
+  </script>
+</body>
+</html>
