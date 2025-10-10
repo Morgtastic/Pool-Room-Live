@@ -1,28 +1,28 @@
 <!doctype html>
 <html>
 <head>
-
   <meta charset="utf-8" />
-  <title>Supabase SDK Check</title>
+  <title>SDK Check</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script defer src="../js/supabaseClient.js?v=5"></script>
 
+  <!-- 1) Load Supabase SDK directly from CDN (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <!-- 2) Create the client INLINE here (so this page doesn't depend on ../js/supabaseClient.js) -->
   <script>
-    window.addEventListener('error', function onErr(e) {
-      if (String(e.filename||'').includes('@supabase/supabase-js@2') && !window.__FELLBACK__) {
-        window.__FELLBACK__ = true;
-        var alt = document.createElement('script');
-        alt.defer = true;
-        alt.src = "https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js";
-        document.head.appendChild(alt);
-      }
-    }, true);
+    const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co";   // your project URL
+    const SUPABASE_ANON_KEY = "eyJ...";                                 // your anon public key
+    window.sb = window.sb || {};
+    try {
+      sb.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      });
+    } catch (e) {
+      console.error("[sdk-check] createClient failed:", e);
+    }
   </script>
-
-  <!-- Your client file (so we also test it loads) -->
-  <script defer src="../js/supabaseClient.js?v=4"></script>
 </head>
+
 <body style="font-family:system-ui;max-width:760px;margin:24px auto;padding:16px">
   <h1>Supabase SDK & Client Check</h1>
   <pre id="out" style="white-space:pre-wrap;background:#111;color:#eee;padding:12px;border-radius:8px"></pre>
