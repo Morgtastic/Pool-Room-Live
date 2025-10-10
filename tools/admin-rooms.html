@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin — Room Manager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="../styles.css" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="../js/supabaseClient.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Admin — Room Manager</h1>
+    <div class="row">
+      <a class="link" href="../index.html">Live Board</a>
+      <span style="margin:0 8px;">|</span>
+      <a class="link" href="../admin.html">Owner Dashboard</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="admin-gate" class="card">
+      <h2>Checking admin status…</h2>
+      <p class="muted" id="admin-msg"></p>
+    </div>
+
+    <section id="tools" class="hidden vstack gap">
+      <div class="card">
+        <h2>Create Room</h2>
+        <div class="vstack gap">
+          <input id="room-name" class="input" placeholder="Room name" />
+          <div class="row wrap">
+            <input id="owner-id" class="input mono" placeholder="Owner UUID (Auth → Users)" />
+            <button id="pick-owner" class="btn">Where is UUID?</button>
+          </div>
+          <button id="create-room" class="btn primary">Create</button>
+          <div id="create-msg" class="muted"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Rooms</h2>
+        <div id="rooms" class="vstack gap"></div>
+      </div>
+    </section>
+  </main>
+
+  <template id="room-row">
+    <div class="card">
+      <div class="row between">
+        <h3><span data-dot class="status-dot"></span> <span data-name></span></h3>
+        <span class="badge" data-badge></span>
+      </div>
+      <div class="updated" data-updated></div>
+      <div class="vstack gap" style="margin-top:8px">
+        <div class="row wrap">
+          <input data-owner class="input mono" placeholder="Owner UUID" />
+          <button data-reassign class="btn">Reassign Owner</button>
+        </div>
+        <div class="row wrap">
+          <input data-rename class="input" placeholder="New room name" />
+          <button data-apply-rename class="btn">Rename</button>
+        </div>
+        <div class="row wrap">
+          <button data-s-green class="btn status-btn green">🟢 GREEN</button>
+          <button data-s-yellow class="btn status-btn yellow">🟡 YELLOW</button>
+          <button data-s-red class="btn status-btn red">🔴 RED</button>
+          <button data-delete class="btn" style="margin-left:auto">Delete</button>
+        </div>
+        <div class="row wrap">
+          <input class="input mono" data-share readonly />
+          <button data-copy class="btn">Copy Share Link</button>
+        </div>
+        <div data-msg class="muted"></div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    (async () => {
+      const supabase = sb.client;
+      const adminMsg = document.getElementById('admin-msg');
+      const gate = document.getElementById('admin-gate');
+      const tools = document.getElementById('tools');
+
+      // Must be signed in
+      const { data: sessData } = await supabase.auth.getSession();
+      if (!sessData.session) { adminMsg.textContent = "Not signed in. Go to Owner Dashboard and sign in."; return; }
+      const uid = sessData.session.user.id;
+
+      // Admin check
+      const { data: adminCheck, error: adminErr } = await supabase
+        .from('admins').select('user_id').eq('user_id', uid).maybeSingle();
+
+      if (adminErr) { adminMsg.textContent = "Error: " + adminErr.message; return; }
+      if (!adminCheck) { adminMsg.textContent = "You are not an admin."; return; }
+
+      gate.innerHTML = "<h2>You are an admin.</h2>";
+      tools.classList.remove('hidden');
+
+      // Create room
+      const roomNameEl = document.getElementById('room-name');
+      const ownerIdEl = document.getElementById('owner-id');
+      const createBtn = document.getElementById('create-room');
+      const createMsg = document.getElementById('create-msg');
+
+      document.getElementById('pick-owner').onclick = () =>
+        alert("Supabase → Auth → Users → click the user → copy UUID. Paste it here.");
+
+      createBtn.onclick = async () => {
+        createBtn.disabled = true; createMsg.textContent = "Creating…";
+        const name = roomNameEl.value.trim();
+        const owner_id = ownerIdEl.value.trim();
+        if (!name || !owner_id) { createMsg.textContent = "Enter name and owner UUID."; createBtn.disabled = false; return; }
+        const { error } = await supabase.from('rooms').insert({ name, owner_id });
+        createMsg.textContent = error ? ("Error: " + error.message) : "Created.";
+        createBtn.disabled = false;
+        if (!error) { roomNameEl.value=""; ownerIdEl.value=""; await loadRooms(); }
+      };
+
+      // List + manage rooms
+      const roomsEl = document.getElementById('rooms');
+      const tpl = document.getElementById('room-row');
+      const dot = (s) => ({green:"dot-green",yellow:"dot-yellow",red:"dot-red"}[s] || "dot-green");
+      const badgeText = (s) => ({green:"🟢 Open / No wait",yellow:"🟡 Moderate wait",red:"🔴 Full / Busy"}[s] || s);
+
+      const loadRooms = async () => {
+        roomsEl.textContent = "Loading…";
+        const { data, error } = await supabase
+          .from('rooms')
+          .select('id,name,status,owner_id,public_slug,updated_at')
+          .order('name', { ascending: true });
+        if (error) { roomsEl.textContent = "Error: " + error.message; return; }
+        roomsEl.innerHTML = "";
+        data.forEach(r => {
+          const node = tpl.content.cloneNode(true);
+          node.querySelector('[data-name]').textContent = r.name;
+          node.querySelector('[data-dot]').className = `status-dot ${dot(r.status)}`;
+          const b = node.querySelector('[data-badge]'); b.className = `badge ${r.status}`; b.textContent = badgeText(r.status);
+          node.querySelector('[data-updated]').textContent = "Updated: " + sb.formatTime(r.updated_at);
+          node.querySelector('[data-owner]').value = r.owner_id;
+          node.querySelector('[data-share]').value = sb.roomUrl(r.public_slug);
+          const msg = node.querySelector('[data-msg]');
+
+          node.querySelector('[data-copy]').onclick = async () => { await navigator.clipboard.writeText(sb.roomUrl(r.public_slug)); msg.textContent = "Share link copied"; setTimeout(()=>msg.textContent="",1200); };
+          node.querySelector('[data-reassign]').onclick = async () => { const owner_id = node.querySelector('[data-owner]').value.trim(); if (!owner_id) { msg.textContent="Enter owner UUID"; return; } const { error } = await supabase.from('rooms').update({ owner_id }).eq('id', r.id); msg.textContent = error ? ("Error: "+error.message) : "Owner updated."; if (!error) await loadRooms(); };
+          node.querySelector('[data-apply-rename]').onclick = async () => { const newName = node.querySelector('[data-rename]').value.trim(); if (!newName) { msg.textContent = "Enter a new name."; return; } const { error } = await supabase.from('rooms').update({ name: newName }).eq('id', r.id); msg.textContent = error ? ("Error: "+error.message) : "Renamed."; if (!error) await loadRooms(); };
+          node.querySelector('[data-s-green]').onclick = async () => { const { error } = await supabase.from('rooms').update({ status: 'green' }).eq('id', r.id); msg.textContent = error ? ("Error: "+error.message) : "Set to GREEN."; if (!error) await loadRooms(); };
+          node.querySelector('[data-s-yellow]').onclick = async () => { const { error } = await supabase.from('rooms').update({ status: 'yellow' }).eq('id', r.id); msg.textContent = error ? ("Error: "+error.message) : "Set to YELLOW."; if (!error) await loadRooms(); };
+          node.querySelector('[data-s-red]').onclick = async () => { const { error } = await supabase.from('rooms').update({ status: 'red' }).eq('id', r.id); msg.textContent = error ? ("Error: "+error.message) : "Set to RED."; if (!error) await loadRooms(); };
+          node.querySelector('[data-delete]').onclick = async () => { if (!confirm(`Delete "${r.name}"?`)) return; const { error } = await supabase.from('rooms').delete().eq('id', r.id); msg.textContent = error ? ("Error: "+error.message) : "Deleted."; if (!error) await loadRooms(); };
+
+          roomsEl.appendChild(node);
+        });
+      };
+
+      await loadRooms();
+      setInterval(loadRooms, 10_000);
+    })();
+  </script>
+</body>
+</html>
