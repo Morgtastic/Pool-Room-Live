@@ -54,5 +54,23 @@
       out.textContent = lines.join("\n");
     })();
   </script>
+  <script type="module">
+  // Prove the loader fired and window.supabase exists
+  const out = document.getElementById('out');
+  function log(msg){ out.textContent += (out.textContent ? "\n" : "") + msg; }
+
+  window.addEventListener('supabase-ready', () => log('EVENT: supabase-ready fired'), { once: true });
+
+  // Also check after a short delay
+  setTimeout(() => {
+    log('typeof window.supabase: ' + typeof window.supabase);
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      log('SDK OK: createClient is available');
+    } else {
+      log('SDK NOT READY: check type="module" and script src path');
+    }
+  }, 800);
+</script>
+
 </body>
 </html>
