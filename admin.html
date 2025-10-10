@@ -1,61 +1,362 @@
+<!-- FILE: admin.html (replace fully) -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Pool Rooms — Owner Dashboard</title>
+  <title>Owner Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="./styles.css" rel="stylesheet" />
- <script defer src="./vendor/supabase.umd.js?v=1"></script>
-<script defer src="./js/supabaseClient.js?v=1"></script>
-
-
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <script defer src="./js/supabaseClient.js"></script>
-  <script defer src="./js/admin.js"></script>
+  <!-- SDK first (local), then your client, then page JS -->
+  <script defer src="./vendor/supabase.umd.js?v=1"></script>
+  <script defer src="./js/supabaseClient.js?v=1"></script>
+  <script defer src="./js/admin.js?v=1"></script>
 </head>
 <body>
   <header class="topbar">
     <h1>Owner Dashboard</h1>
-    <a class="link" href="./index.html">View Live Board</a>
+    <div class="row">
+      <a class="link" href="./index.html">Live Board</a>
+      <span style="margin:0 8px;">|</span>
+      <a class="link" href="./tools/admin-rooms.html">Admin Manager</a>
+    </div>
   </header>
 
   <main class="container" id="app">
-    <!-- Auth Panel -->
+    <!-- Auth -->
     <section id="auth-panel" class="card">
       <h2>Sign In</h2>
       <form id="signin-form" class="vstack">
         <input id="email" type="email" placeholder="Email" autocomplete="email" required />
         <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
         <button id="signin-btn" type="submit" class="btn primary">Sign In</button>
-        <button id="signup-btn" type="button" class="btn">Create Account</button>
-        <div id="auth-msg" class="muted"></div>
+        <div id="auth-msg" class="muted mono"></div>
       </form>
     </section>
 
-    <!-- Dashboard Panel -->
+    <!-- Dashboard -->
     <section id="dash-panel" class="hidden">
       <div class="row between">
         <h2>Your Rooms</h2>
         <button id="signout-btn" class="btn">Sign Out</button>
       </div>
-
       <div id="rooms-wrap" class="vstack gap"></div>
 
       <div class="card">
         <h3>Share the Public Live Board</h3>
-        <p class="muted">This QR opens <code>index.html</code> (all rooms).</p>
-        <canvas id="qr-board" class="qr"></canvas>
+        <p class="muted">This opens <code>index.html</code> (all rooms).</p>
         <div class="row wrap">
           <input id="board-link" class="mono input" readonly />
           <button id="copy-board" class="btn">Copy Link</button>
         </div>
+        <div id="share-msg" class="muted mono"></div>
       </div>
     </section>
   </main>
 
   <footer class="foot">
-    <span>Tip: Print the QR and post it by the counter.</span>
+    <span class="muted">If you see no rooms, ask your admin to assign one.</span>
   </footer>
+</body>
+</html>
+
+<!-- FILE: js/admin.js (replace fully) -->
+(() => {
+  // Fail-fast banners (why: your SDK/client were missing earlier)
+  const banner = (txt) => {
+    const b = document.createElement('div');
+    b.style.cssText = "position:fixed;left:0;right:0;top:0;background:#b00020;color:#fff;padding:10px 14px;font:14px system-ui;z-index:99999";
+    b.textContent = txt;
+    document.body.appendChild(b);
+  };
+  if (!window.supabase) { window.addEventListener('DOMContentLoaded', ()=>banner("Supabase SDK missing. Check /vendor/supabase.umd.js script tag.")); return; }
+  if (!window.sb || !sb.client) { window.addEventListener('DOMContentLoaded', ()=>banner("Supabase client missing. Check /js/supabaseClient.js and order.")); return; }
+
+  const supabase = sb.client;
+
+  const authPanel = document.getElementById("auth-panel");
+  const dashPanel = document.getElementById("dash-panel");
+  const signinForm = document.getElementById("signin-form");
+  const emailEl = document.getElementById("email");
+  const passEl = document.getElementById("password");
+  const signinBtn = document.getElementById("signin-btn");
+  const authMsg = document.getElementById("auth-msg");
+  const roomsWrap = document.getElementById("rooms-wrap");
+  const signoutBtn = document.getElementById("signout-btn");
+  const boardLinkInput = document.getElementById("board-link");
+  const copyBoardBtn = document.getElementById("copy-board");
+  const shareMsg = document.getElementById("share-msg");
+
+  const setMsg = (m) => authMsg.textContent = m || "";
+  const showDash = (show) => { authPanel.classList.toggle("hidden", show); dashPanel.classList.toggle("hidden", !show); };
+
+  // Share link = public board
+  const boardUrl = new URL("./index.html", location.href).toString();
+  boardLinkInput.value = boardUrl;
+  copyBoardBtn.onclick = async () => {
+    try { await navigator.clipboard.writeText(boardUrl); shareMsg.textContent = "Copied."; setTimeout(()=>shareMsg.textContent="",1200); }
+    catch { shareMsg.textContent = "Copy failed."; }
+  };
+
+  // Render a single room card with R/Y/G
+  const roomCard = (room) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="row between">
+        <h3><span class="status-dot ${sb.dotClass(room.status)}"></span> ${room.name}</h3>
+        <span class="badge ${room.status}">${sb.statusEmoji(room.status)} ${sb.statusLabel(room.status)}</span>
+      </div>
+      <div class="updated">Updated: ${sb.formatTime(room.updated_at)}</div>
+      <div class="status-grid" id="btns-${room.id}"></div>
+      <div class="row wrap" style="margin-top:8px">
+        <input class="input mono" value="${sb.roomUrl(room.public_slug)}" readonly />
+        <button class="btn" id="copy-${room.id}">Copy Room Link</button>
+      </div>
+    `;
+    const grid = card.querySelector(`#btns-${room.id}`);
+    [["green","🟢"],["yellow","🟡"],["red","🔴"]].forEach(([s, dot]) => {
+      const b = document.createElement("button");
+      b.className = `btn status-btn ${s}`;
+      b.textContent = `${dot} ${s.toUpperCase()}`;
+      b.onclick = async () => {
+        b.disabled = true;
+        try {
+          const { error } = await supabase.from("rooms").update({ status: s }).eq("id", room.id);
+          if (error) throw error;
+        } catch (e) {
+          alert("Update failed: " + e.message);
+        } finally {
+          b.disabled = false;
+        }
+      };
+      grid.appendChild(b);
+    });
+    card.querySelector(`#copy-${room.id}`).onclick = async () => {
+      try { await navigator.clipboard.writeText(sb.roomUrl(room.public_slug)); }
+      catch {}
+    };
+    return card;
+  };
+
+  const renderRooms = (rows) => {
+    roomsWrap.innerHTML = "";
+    if (!rows || rows.length === 0) {
+      roomsWrap.innerHTML = `<div class="card"><p class="muted">No rooms assigned to this owner yet.</p></div>`;
+      return;
+    }
+    rows.forEach(r => roomsWrap.appendChild(roomCard(r)));
+  };
+
+  const loadMyRooms = async () => {
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session) return;
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("id,name,status,public_slug,updated_at")
+      .eq("owner_id", sess.session.user.id)
+      .order("name", { ascending: true });
+    if (error) { setMsg(error.message); return; }
+    renderRooms(data);
+  };
+
+  // Init
+  (async () => {
+    const { data } = await supabase.auth.getSession();
+    showDash(!!data.session);
+    if (data.session) await loadMyRooms();
+  })();
+
+  // Auth handlers
+  signinForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    signinBtn.disabled = true; setMsg("Signing in…");
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: emailEl.value.trim(), password: passEl.value });
+      if (error) throw error;
+      setMsg("");
+      emailEl.value = ""; passEl.value = "";
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      signinBtn.disabled = false;
+    }
+  });
+
+  signoutBtn.addEventListener("click", async () => {
+    await supabase.auth.signOut();
+  });
+
+  // React to auth changes
+  supabase.auth.onAuthStateChange(async (_ev, sess) => {
+    showDash(!!sess);
+    if (sess) await loadMyRooms();
+  });
+
+  // Poll for updates
+  setInterval(loadMyRooms, 10_000);
+})();
+
+<!-- FILE: tools/admin-rooms.html (replace fully) -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin — Room Manager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="../styles.css" rel="stylesheet" />
+  <!-- SDK first (local), then your client -->
+  <script defer src="../vendor/supabase.umd.js?v=1"></script>
+  <script defer src="../js/supabaseClient.js?v=1"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Admin — Room Manager</h1>
+    <div class="row">
+      <a class="link" href="../index.html">Live Board</a>
+      <span style="margin:0 8px;">|</span>
+      <a class="link" href="../admin.html">Owner Dashboard</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="admin-gate" class="card">
+      <h2>Checking admin status…</h2>
+      <pre id="admin-msg" class="mono muted" style="white-space:pre-wrap"></pre>
+    </div>
+
+    <section id="tools" class="hidden vstack gap">
+      <div class="card">
+        <h2>Create Room</h2>
+        <div class="vstack gap">
+          <input id="room-name" class="input" placeholder="Room name" />
+          <div class="row wrap">
+            <input id="owner-id" class="input mono" placeholder="Owner UUID (Auth → Users)" />
+            <button id="use-my-id" class="btn">Use my UUID</button>
+          </div>
+          <button id="create-room" class="btn primary">Create</button>
+          <div id="create-msg" class="muted mono"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Rooms</h2>
+        <div id="rooms" class="vstack gap"></div>
+      </div>
+    </section>
+  </main>
+
+  <template id="room-row">
+    <div class="card">
+      <div class="row between">
+        <h3><span data-dot class="status-dot"></span> <span data-name></span></h3>
+        <span class="badge" data-badge></span>
+      </div>
+      <div class="updated" data-updated></div>
+      <div class="vstack gap" style="margin-top:8px">
+        <div class="row wrap">
+          <input data-owner class="input mono" placeholder="Owner UUID" />
+          <button data-reassign class="btn">Reassign Owner</button>
+        </div>
+        <div class="row wrap">
+          <input data-rename class="input" placeholder="New room name" />
+          <button data-apply-rename class="btn">Rename</button>
+        </div>
+        <div class="row wrap">
+          <button data-s-green class="btn status-btn green">🟢 GREEN</button>
+          <button data-s-yellow class="btn status-btn yellow">🟡 YELLOW</button>
+          <button data-s-red   class="btn status-btn red">🔴 RED</button>
+          <button data-delete  class="btn" style="margin-left:auto">Delete</button>
+        </div>
+        <div class="row wrap">
+          <input class="input mono" data-share readonly />
+          <button data-copy class="btn">Copy Share Link</button>
+        </div>
+        <div data-msg class="muted mono"></div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    (async () => {
+      const log = (m) => { const el = document.getElementById('admin-msg'); el.textContent += (el.textContent ? '\n' : '') + m; console.log('[ADMIN]', m); };
+      if (!window.supabase) { log("ERROR: SDK missing. Check ../vendor/supabase.umd.js tag in <head>."); return; }
+      if (!window.sb || !sb.client) { log("ERROR: sb.client missing. Check ../js/supabaseClient.js tag and order."); return; }
+      const supabase = sb.client;
+
+      log('Checking session…');
+      const { data: sessData, error: sessErr } = await supabase.auth.getSession();
+      if (sessErr) { log('Session error: ' + sessErr.message); return; }
+      if (!sessData.session) { log('Not signed in. Go to /admin.html and sign in, then reload.'); return; }
+      const uid = sessData.session.user.id;
+      log('Signed in: ' + uid);
+
+      log('Checking admin table…');
+      const { data: adminRow, error: adminErr, status } = await supabase
+        .from('admins').select('user_id').eq('user_id', uid).maybeSingle();
+      if (adminErr) { log('Admin check error (' + status + '): ' + adminErr.message); return; }
+      if (!adminRow) { log('You are NOT an admin. Insert your UUID into public.admins, then reload.'); return; }
+
+      document.getElementById('admin-gate').innerHTML = "<h2>You are an admin.</h2><p class='muted'>Use the tools below.</p>";
+      document.getElementById('tools').classList.remove('hidden');
+
+      const isUUID = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+      const dot = (s) => ({green:"dot-green",yellow:"dot-yellow",red:"dot-red"}[s] || "dot-green");
+      const label = (s) => ({green:"🟢 Open / No wait",yellow:"🟡 Moderate wait",red:"🔴 Full / Busy"}[s] || s);
+
+      const roomNameEl = document.getElementById('room-name');
+      const ownerIdEl  = document.getElementById('owner-id');
+      const createBtn  = document.getElementById('create-room');
+      const createMsg  = document.getElementById('create-msg');
+      document.getElementById('use-my-id').onclick = () => { ownerIdEl.value = uid; };
+
+      createBtn.onclick = async () => {
+        createBtn.disabled = true; createMsg.textContent = "Creating…";
+        const name = roomNameEl.value.trim();
+        const owner_id = ownerIdEl.value.trim();
+        if (!name) { createMsg.textContent = "Enter a room name."; createBtn.disabled=false; return; }
+        if (!isUUID(owner_id)) { createMsg.textContent = "Owner UUID invalid."; createBtn.disabled=false; return; }
+        const { error } = await supabase.from('rooms').insert({ name, owner_id });
+        createMsg.textContent = error ? ("Error: " + error.message) : "Created.";
+        createBtn.disabled = false;
+        if (!error) { roomNameEl.value=""; ownerIdEl.value=""; await loadRooms(); }
+      };
+
+      const roomsEl = document.getElementById('rooms');
+      const tpl = document.getElementById('room-row');
+
+      const loadRooms = async () => {
+        roomsEl.textContent = "Loading…";
+        const { data, error } = await supabase
+          .from('rooms')
+          .select('id,name,status,owner_id,public_slug,updated_at')
+          .order('name', { ascending: true });
+        if (error) { roomsEl.textContent = "Error: " + error.message; return; }
+        roomsEl.innerHTML = "";
+        data.forEach(r => {
+          const node = tpl.content.cloneNode(true);
+          node.querySelector('[data-name]').textContent = r.name;
+          node.querySelector('[data-dot]').className = `status-dot ${dot(r.status)}`;
+          const b = node.querySelector('[data-badge]'); b.className = `badge ${r.status}`; b.textContent = label(r.status);
+          node.querySelector('[data-updated]').textContent = "Updated: " + sb.formatTime(r.updated_at);
+          node.querySelector('[data-owner]').value = r.owner_id;
+          node.querySelector('[data-share]').value = sb.roomUrl(r.public_slug);
+          const msg = node.querySelector('[data-msg]');
+
+          node.querySelector('[data-copy]').onclick = async () => { await navigator.clipboard.writeText(sb.roomUrl(r.public_slug)); msg.textContent = "Share link copied"; setTimeout(()=>msg.textContent="",1200); };
+          node.querySelector('[data-reassign]').onclick = async () => { const newOwner = node.querySelector('[data-owner]').value.trim(); if (!isUUID(newOwner)) { msg.textContent = "Owner UUID invalid."; return; } const { error } = await supabase.from('rooms').update({ owner_id: newOwner }).eq('id', r.id); msg.textContent = error ? ("Error: " + error.message) : "Owner updated."; if (!error) await loadRooms(); };
+          node.querySelector('[data-apply-rename]').onclick = async () => { const newName = node.querySelector('[data-rename]').value.trim(); if (!newName) { msg.textContent = "Enter a new name."; return; } const { error } = await supabase.from('rooms').update({ name: newName }).eq('id', r.id); msg.textContent = error ? ("Error: " + error.message) : "Renamed."; if (!error) await loadRooms(); };
+          node.querySelector('[data-s-green]').onclick = async () => { const { error } = await supabase.from('rooms').update({ status: 'green' }).eq('id', r.id); msg.textContent = error ? ("Error: " + error.message) : "Set to GREEN."; if (!error) await loadRooms(); };
+          node.querySelector('[data-s-yellow]').onclick = async () => { const { error } = await supabase.from('rooms').update({ status: 'yellow' }).eq('id', r.id); msg.textContent = error ? ("Error: " + error.message) : "Set to YELLOW."; if (!error) await loadRooms(); };
+          node.querySelector('[data-s-red]').onclick = async () => { const { error } = await supabase.from('rooms').update({ status: 'red' }).eq('id', r.id); msg.textContent = error ? ("Error: " + error.message) : "Set to RED."; if (!error) await loadRooms(); };
+          node.querySelector('[data-delete]').onclick = async () => { if (!confirm(\`Delete "\${r.name}"?\`)) return; const { error } = await supabase.from('rooms').delete().eq('id', r.id); msg.textContent = error ? ("Error: " + error.message) : "Deleted."; if (!error) await loadRooms(); };
+
+          roomsEl.appendChild(node);
+        });
+      };
+
+      await loadRooms();
+      setInterval(loadRooms, 10_000);
+    })();
+  </script>
 </body>
 </html>
