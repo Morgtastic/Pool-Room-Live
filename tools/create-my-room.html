@@ -1,0 +1,88 @@
+# Create these files in your repo
+
+# 1) FILE: tools/create-my-room.html
+# Purpose: Admin creates a room for THE CURRENT SIGNED-IN USER (no UUIDs, no SQL).
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Create My Room (Admin only)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link href="../styles.css" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="../js/supabaseClient.js"></script>
+</head>
+<body class="container" style="max-width:720px">
+  <h1>Create My Room</h1>
+  <p class="muted">Sign in on <a href="../admin.html">admin.html</a> first. This creates a room owned by <em>your</em> account.</p>
+
+  <form id="f" class="vstack gap" style="margin-top:12px">
+    <input id="name" class="input" placeholder="Room name (e.g., Downtown Billiards)" required />
+    <button class="btn primary">Create</button>
+  </form>
+
+  <pre id="msg" class="mono" style="white-space:pre-wrap;background:#111;color:#eee;padding:12px;border-radius:8px;margin-top:12px"></pre>
+
+  <script>
+    (async () => {
+      const f = document.getElementById('f');
+      const msg = document.getElementById('msg');
+      const isUUID = s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        msg.textContent = 'Checking session…';
+        const sess = (await sb.client.auth.getSession()).data.session;
+        if (!sess) { msg.textContent = 'Not signed in. Go to admin.html and sign in.'; return; }
+
+        const owner_id = sess.user.id;
+        if (!isUUID(owner_id)) { msg.textContent = 'Your session UUID is invalid.'; return; }
+
+        const name = document.getElementById('name').value.trim();
+        if (!name) { msg.textContent = 'Enter a room name.'; return; }
+
+        msg.textContent = 'Creating…';
+        const { data, error } = await sb.client
+          .from('rooms')
+          .insert({ name, owner_id })     // RLS: only admins can insert (per your policies)
+          .select('*').single();
+
+        if (error) { msg.textContent = 'Error: ' + error.message; return; }
+        const share = new URL('../index.html?room=' + data.public_slug, location.href).toString();
+        msg.textContent = `Created: ${data.name}\nShare: ${share}\n\nOpen admin.html to toggle status.`;
+        f.reset();
+      });
+    })();
+  </script>
+</body>
+</html>
+
+
+# 2) FILE (optional but handy): tools/my-id.html
+# Purpose: Shows the UUID of the currently signed-in user and copies it to clipboard.
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>My UUID</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="../js/supabaseClient.js"></script>
+</head>
+<body style="font-family:system-ui;max-width:700px;margin:24px auto;padding:16px">
+  <h1>Your User UUID</h1>
+  <p>Sign in on <a href="../admin.html">admin.html</a> first, then reload this page.</p>
+  <pre id="out" style="background:#111;color:#eee;padding:12px;border-radius:8px"></pre>
+  <script>
+    (async () => {
+      const out = document.getElementById('out');
+      const { data } = await sb.client.auth.getSession();
+      if (!data.session) { out.textContent = 'Not signed in.'; return; }
+      out.textContent = 'UUID: ' + data.session.user.id;
+      try { await navigator.clipboard.writeText(data.session.user.id); out.textContent += '\n(Copied to clipboard)'; } catch {}
+    })();
+  </script>
+</body>
+</html>
