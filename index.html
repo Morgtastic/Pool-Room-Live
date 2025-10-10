@@ -1,30 +1,100 @@
+<!-- FILE: index.html (replace fully) -->
 <!doctype html>
 <html lang="en">
 <head>
-
-  <!-- Load SDK via module shim, then your client -->
-<script type="module" src="./vendor/supabase-global.js?v=1"></script>
-<script defer src="./js/supabaseClient.js?v=2"></script>
-
   <meta charset="utf-8" />
-  <title>Pool Rooms — Live Board</title>
+  <title>Pool Room — Live Board</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="./styles.css" rel="stylesheet" />
 
+  <!-- 1) Load Supabase SDK via module shim, then your client -->
+  <script type="module" src="./vendor/supabase-global.js?v=1"></script>
+  <script defer src="./js/supabaseClient.js?v=2"></script>
+
+  <!-- Fail-fast banner if SDK/client missing (why: avoid silent "Loading Rooms…") -->
+  <script>
+    function banner(msg){
+      var b=document.createElement('div');
+      b.style.cssText="position:fixed;left:0;right:0;top:0;background:#b00020;color:#fff;padding:10px 14px;font:14px system-ui;z-index:99999";
+      b.textContent=msg;
+      document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
+    }
+    if (!window.supabase) banner("Supabase SDK missing. Ensure /vendor/supabase-global.js is included with type='module'.");
+    if (!window.sb || !window.sb.client) banner("Supabase client missing. Ensure /js/supabaseClient.js loads after the SDK.");
+  </script>
 </head>
 <body>
   <header class="topbar">
-    <h1>Pool Rooms — Live Board</h1>
-    <a class="link" href="./admin.html">Owner Sign-In</a>
+    <h1>Live Board</h1>
+    <div class="row">
+      <a class="link" href="./admin.html">Owner Dashboard</a>
+    </div>
   </header>
 
-  <main class="container" id="board">
-    <div id="board-status" class="muted">Loading rooms…</div>
-    <div id="rooms" class="grid"></div>
+  <main class="container">
+    <div class="card">
+      <h2>Status</h2>
+      <div class="muted" id="legend">
+        🟢 Open / No wait &nbsp;•&nbsp; 🟡 Moderate wait &nbsp;•&nbsp; 🔴 Full / Busy
+      </div>
+    </div>
+
+    <div id="status-msg" class="muted mono" style="margin:8px 0">Loading Rooms…</div>
+    <div id="rooms" class="vstack gap"></div>
   </main>
 
-  <footer class="foot">
-    <span>Auto-refresh every 10s. Realtime turns on automatically if available.</span>
-  </footer>
-</body>
-</html>
+  <script>
+  (function(){
+    // Stop if SDK/client are missing; banners above explain.
+    if (!window.supabase || !window.sb || !sb.client) return;
+
+    const supabase = sb.client;
+    const roomsEl  = document.getElementById('rooms');
+    const msgEl    = document.getElementById('status-msg');
+
+    const dotClass = (s) => sb.dotClass(s);
+    const label    = (s) => `${sb.statusEmoji(s)} ${sb.statusLabel(s)}`;
+
+    // Optional filter: /index.html?room=<public_slug>
+    const params = new URLSearchParams(location.search);
+    const filterSlug = params.get('room')?.trim() || null;
+
+    function setMsg(t){ msgEl.textContent = t || ""; }
+    function card(room){
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.dataset.roomId = room.id;
+      div.innerHTML = `
+        <div class="row between">
+          <h3><span class="status-dot ${dotClass(room.status)}"></span> ${room.name}</h3>
+          <span class="badge ${room.status}">${label(room.status)}</span>
+        </div>
+        <div class="updated">Updated: ${sb.formatTime(room.updated_at)}</div>
+      `;
+      return div;
+    }
+
+    function render(list){
+      roomsEl.innerHTML = "";
+      if (!list || list.length === 0) {
+        setMsg(filterSlug ? "No matching room." : "No rooms yet.");
+        return;
+      }
+      setMsg("");
+      list.forEach(r => roomsEl.appendChild(card(r)));
+    }
+
+    async function load(){
+      try {
+        setMsg("Loading Rooms…");
+        let q = supabase.from('rooms')
+          .select('id,name,status,public_slug,updated_at')
+          .order('name', { ascending: true });
+        if (filterSlug) q = q.eq('public_slug', filterSlug);
+
+        const { data, error } = await q;
+        if (error) { setMsg("Error: " + error.message); console.error("[LiveBoard] SELECT error:", error); return; }
+        render(data);
+      } catch (e) {
+        setMsg("Error: " + (e?.message || e));
+        console.error("[LiveBoard] exception:", e);
