@@ -1,0 +1,227 @@
+<!-- FILE: /tools/onefile-admin.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Owner Dashboard — Single File</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Minimal styles (why: self-contained, readable) -->
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#e5e7eb; --br:#1f2937; }
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:var(--text)}
+    a{color:var(--accent);text-decoration:none}
+    .container{max-width:900px;margin:24px auto;padding:12px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111827;border-bottom:1px solid var(--br)}
+    .card{background:#111827;border:1px solid var(--br);border-radius:12px;padding:16px;margin:12px 0}
+    .vstack{display:flex;flex-direction:column}.gap{gap:12px}.row{display:flex;gap:8px;align-items:center}.between{justify-content:space-between}
+    .hidden{display:none}.muted{color:var(--muted)}.mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+    input.input{padding:10px;border:1px solid #334155;border-radius:8px;background:#0b1220;color:var(--text);flex:1;min-width:220px}
+    .btn{padding:10px 12px;border:1px solid #334155;background:#0b1220;color:var(--text);border-radius:10px;cursor:pointer}
+    .btn.primary{border-color:#3b82f6}
+    .badge{padding:6px 10px;border-radius:999px;border:1px solid #334155}
+    .status-dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:6px;vertical-align:middle}
+    .dot-green{background:#16a34a}.dot-yellow{background:#f59e0b}.dot-red{background:#ef4444}
+    .status-btn.green{border-color:#16a34a}.status-btn.yellow{border-color:#f59e0b}.status-btn.red{border-color:#ef4444}
+    .updated{margin-top:6px;color:var(--muted);font-size:0.9rem}
+    .row.wrap{flex-wrap:wrap}
+    .error{color:#fca5a5}
+  </style>
+
+  <!-- 1) Supabase SDK (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <!-- 2) Create client INLINE (why: avoid any external file/timing issues) -->
+  <script>
+    // TODO: EDIT THESE TWO LINES WITH YOUR REAL VALUES
+    const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co";  // your project URL
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXdlYW5oeHh3bHZubWlzYmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMjUxMjksImV4cCI6MjA3NTYwMTEyOX0.FaQeS9jH3WFgFGkSipjaj3lgPdm5Xoo-hGikXzWRqvg"; // your anon public key
+
+    // Fail-fast hints (why: common misconfig)
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL)) {
+      console.error("Bad SUPABASE_URL:", SUPABASE_URL);
+    }
+    if (!/^eyJ/.test(SUPABASE_ANON_KEY)) {
+      console.error("Anon key should start with 'eyJ...'");
+    }
+
+    // Global client + tiny helpers
+    window.sb = window.sb || {};
+    try {
+      sb.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      });
+    } catch (e) {
+      console.error("[onefile-admin] createClient failed:", e);
+    }
+    sb.statusLabel = (s)=>({ green:"Open / No wait", yellow:"Moderate wait", red:"Full / Busy" }[s] ?? s);
+    sb.statusEmoji = (s)=>({ green:"🟢", yellow:"🟡", red:"🔴" }[s] ?? "❓");
+    sb.dotClass    = (s)=>({ green:"dot-green", yellow:"dot-yellow", red:"dot-red" }[s] ?? "dot-red");
+    sb.formatTime  = (iso)=>{ try{ return new Date(iso).toLocaleString(); }catch{ return ""; } };
+    sb.boardUrl    = ()=> new URL("../index.html", location.href).toString(); // public board at repo root
+    sb.roomUrl     = (slug)=>{ const u=new URL(sb.boardUrl()); u.searchParams.set("room", slug); return u.toString(); };
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Owner Dashboard (Single File)</h1>
+    <div class="row">
+      <a class="link" href="../index.html">Live Board</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Sign-in -->
+    <section id="auth-panel" class="card">
+      <h2>Sign In</h2>
+      <form id="signin-form" class="vstack" onsubmit="return false;">
+        <input id="email" class="input" type="email" placeholder="Email" autocomplete="email" required />
+        <input id="password" class="input" type="password" placeholder="Password" autocomplete="current-password" required />
+        <button id="signin-btn" type="submit" class="btn primary">Sign In</button>
+        <div id="auth-msg" class="muted mono"></div>
+      </form>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dash-panel" class="hidden">
+      <div class="row between">
+        <h2>Your Rooms</h2>
+        <button id="signout-btn" class="btn">Sign Out</button>
+      </div>
+
+      <div id="rooms-wrap" class="vstack gap"></div>
+
+      <div class="card">
+        <h3>Share the Public Live Board</h3>
+        <p class="muted">Opens <code>index.html</code> (all rooms).</p>
+        <div class="row wrap">
+          <input id="board-link" class="mono input" readonly />
+          <button id="copy-board" class="btn">Copy Link</button>
+        </div>
+        <div id="share-msg" class="muted mono"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Page wiring -->
+  <script>
+    (function(){
+      const $ = (id)=>document.getElementById(id);
+      const E = {
+        authPanel:  $('auth-panel'),
+        dashPanel:  $('dash-panel'),
+        form:       $('signin-form'),
+        email:      $('email'),
+        pass:       $('password'),
+        btn:        $('signin-btn'),
+        msg:        $('auth-msg'),
+        rooms:      $('rooms-wrap'),
+        signout:    $('signout-btn'),
+        board:      $('board-link'),
+        copyBoard:  $('copy-board'),
+        shareMsg:   $('share-msg'),
+      };
+      const setMsg = (m, isErr=false)=>{ if(E.msg){ E.msg.textContent=m||""; E.msg.className = isErr ? "mono error" : "muted mono"; } };
+      const showDash = (on)=>{ E.authPanel.classList.toggle('hidden', on); E.dashPanel.classList.toggle('hidden', !on); };
+
+      function roomCard(r){
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="row between">
+            <h3><span class="status-dot ${sb.dotClass(r.status)}"></span> ${r.name}</h3>
+            <span class="badge ${r.status}">${sb.statusEmoji(r.status)} ${sb.statusLabel(r.status)}</span>
+          </div>
+          <div class="updated">Updated: ${sb.formatTime(r.updated_at)}</div>
+          <div class="status-grid" id="btns-${r.id}"></div>
+          <div class="row wrap" style="margin-top:8px">
+            <input class="input mono" value="${sb.roomUrl(r.public_slug)}" readonly />
+            <button class="btn" id="cpy-${r.id}">Copy Room Link</button>
+          </div>`;
+        const grid = card.querySelector(`#btns-${r.id}`);
+        [["green","🟢"],["yellow","🟡"],["red","🔴"]].forEach(([s,d])=>{
+          const b=document.createElement('button'); b.className=`btn status-btn ${s}`; b.textContent=`${d} ${s.toUpperCase()}`;
+          b.onclick=async()=>{
+            b.disabled=true;
+            try {
+              const { error } = await sb.client.from('rooms').update({ status:s }).eq('id', r.id);
+              if (error) throw error;
+              r.status=s;
+              card.querySelector('.status-dot').className=`status-dot ${sb.dotClass(s)}`;
+              const bd=card.querySelector('.badge'); bd.className=`badge ${s}`; bd.textContent=`${sb.statusEmoji(s)} ${sb.statusLabel(s)}`;
+              card.querySelector('.updated').textContent="Updated: "+sb.formatTime(new Date().toISOString());
+            } catch(e){ alert("Update failed: " + e.message); }
+            finally { b.disabled=false; }
+          };
+          grid.appendChild(b);
+        });
+        card.querySelector(`#cpy-${r.id}`).onclick=async()=>{ try{ await navigator.clipboard.writeText(sb.roomUrl(r.public_slug)); }catch{} };
+        return card;
+      }
+
+      async function loadMyRooms(){
+        const { data: { session } } = await sb.client.auth.getSession();
+        if (!session) return;
+        const { data, error } = await sb.client
+          .from('rooms')
+          .select('id,name,status,public_slug,updated_at')
+          .eq('owner_id', session.user.id)
+          .order('name', { ascending: true });
+        if (error){ setMsg(error.message, true); return; }
+        E.rooms.innerHTML = "";
+        if (!data || !data.length) {
+          E.rooms.innerHTML = '<div class="card"><p class="muted">No rooms assigned yet.</p></div>';
+          return;
+        }
+        data.forEach(r => E.rooms.appendChild(roomCard(r)));
+      }
+
+      // Board link
+      (function(){
+        const boardUrl = sb.boardUrl();
+        E.board.value = boardUrl;
+        E.copyBoard.onclick = async ()=>{ try{ await navigator.clipboard.writeText(boardUrl); E.shareMsg.textContent="Copied."; setTimeout(()=>E.shareMsg.textContent="",1200); }catch{} };
+      })();
+
+      // Sign-in handler
+      E.form.addEventListener('submit', async (ev)=>{
+        ev.preventDefault();
+        setMsg("Signing in…");
+        E.btn.disabled = true;
+        try {
+          const { error } = await sb.client.auth.signInWithPassword({
+            email: E.email.value.trim(),
+            password: E.pass.value
+          });
+          if (error) throw error;
+          E.email.value = ""; E.pass.value = ""; setMsg("");
+          showDash(true);
+          await loadMyRooms();
+        } catch (err) {
+          setMsg(err.message || String(err), true);
+        } finally {
+          E.btn.disabled = false;
+        }
+      });
+
+      // Sign-out
+      E.signout.addEventListener('click', async ()=>{
+        await sb.client.auth.signOut();
+        showDash(false);
+        setMsg("");
+      });
+
+      // Initial UI
+      (async ()=>{
+        try {
+          const { data: { session } } = await sb.client.auth.getSession();
+          showDash(!!session);
+          if (session) await loadMyRooms();
+          // Optional periodic refresh
+          setInterval(loadMyRooms, 10000);
+        } catch(e){ setMsg(e.message, true); }
+      })();
+    })();
+  </script>
+</body>
+</html>
