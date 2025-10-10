@@ -1,15 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- Load SDK via module shim, then your client -->
+<script type="module" src="./vendor/supabase-global.js?v=1"></script>
+<script defer src="./js/supabaseClient.js?v=2"></script>
+
+  
   <meta charset="utf-8" />
   <title>Owner Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="./styles.css" rel="stylesheet" />
-
-  <!-- 1) SDK (must exist at /vendor/supabase.umd.js) -->
-  <script defer src="./vendor/supabase.umd.js?v=1"></script>
-  <!-- 2) Your Supabase client (must exist at /js/supabaseClient.js) -->
-  <script defer src="./js/supabaseClient.js?v=1"></script>
 
   <script>
     // Show a big red banner if SDK/client are missing (why: fail fast)
