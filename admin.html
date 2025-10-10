@@ -1,4 +1,4 @@
-<!-- FILE: admin.html (REPLACE FULLY) -->
+<!-- FILE: admin.html -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -7,20 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="./styles.css" rel="stylesheet" />
 
-  <!-- Load Supabase SDK via module shim, then your client -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script defer src="./js/supabaseClient.js?v=8"></script>
-
-
-
+  <!-- Supabase SDK (UMD) + your shared client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script defer src="./js/supabaseClient.js?v=10"></script>
 </head>
 <body>
   <header class="topbar">
     <h1>Owner Dashboard</h1>
     <div class="row">
       <a class="link" href="./index.html">Live Board</a>
-      <span style="margin:0 8px;">|</span>
-      <a class="link" href="./tools/admin-rooms.html">Admin Manager</a>
     </div>
   </header>
 
@@ -30,5 +25,172 @@
       <h2>Sign In</h2>
       <form id="signin-form" class="vstack">
         <input id="email" type="email" placeholder="Email" autocomplete="email" required />
-        <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
-        <button id="signin-btn" type="submit" class="btn primary">
+        <input id="pass" type="password" placeholder="Password" autocomplete="current-password" required />
+        <button id="signin-btn" type="submit" class="btn primary">Sign In</button>
+        <div id="auth-msg" class="muted mono"></div>
+      </form>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dash-panel" class="hidden">
+      <div class="row between">
+        <h2>Your Rooms</h2>
+        <button id="signout-btn" class="btn">Sign Out</button>
+      </div>
+      <div id="rooms-wrap" class="vstack gap"></div>
+
+      <div class="card">
+        <h3>Share the Public Live Board</h3>
+        <p class="muted">Opens <code>index.html</code> (all rooms).</p>
+        <div class="row wrap">
+          <input id="board-link" class="mono input" readonly />
+          <button id="copy-board" class="btn">Copy Link</button>
+        </div>
+        <div id="share-msg" class="muted mono"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span class="muted">If you see no rooms, ask your admin to assign one.</span>
+  </footer>
+
+  <!-- Page wiring -->
+  <script>
+  (function(){
+    const wait = (ms)=>new Promise(r=>setTimeout(r,ms));
+    async function readyClient(ms=6000){
+      let t=0; while(t<ms && (!window.sb || !sb.client)){ await wait(200); t+=200; }
+      if (!window.sb || !sb.client) throw new Error("Supabase client not ready. Check js/supabaseClient.js");
+      return sb.client;
+    }
+    function el(id){ return document.getElementById(id); }
+    const E = {
+      authPanel: el('auth-panel'),
+      dashPanel: el('dash-panel'),
+      form: el('signin-form'),
+      email: el('email'),
+      pass: el('pass'),
+      btn: el('signin-btn'),
+      msg: el('auth-msg'),
+      rooms: el('rooms-wrap'),
+      signout: el('signout-btn'),
+      board: el('board-link'),
+      copyBoard: el('copy-board'),
+      shareMsg: el('share-msg'),
+    };
+    const setMsg = (m)=>{ if(E.msg) E.msg.textContent = m || ""; };
+    const showDash = (on)=>{
+      if (E.authPanel) E.authPanel.classList.toggle('hidden', on);
+      if (E.dashPanel) E.dashPanel.classList.toggle('hidden', !on);
+    };
+
+    function roomCard(r){
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="row between">
+          <h3><span class="status-dot ${sb.dotClass(r.status)}"></span> ${r.name}</h3>
+          <span class="badge ${r.status}">${sb.statusEmoji(r.status)} ${sb.statusLabel(r.status)}</span>
+        </div>
+        <div class="updated">Updated: ${sb.formatTime(r.updated_at)}</div>
+        <div class="status-grid" id="btns-${r.id}"></div>
+        <div class="row wrap" style="margin-top:8px">
+          <input class="input mono" value="${sb.roomUrl(r.public_slug)}" readonly />
+          <button class="btn" id="cpy-${r.id}">Copy Room Link</button>
+        </div>
+      `;
+      const grid = card.querySelector(`#btns-${r.id}`);
+      [["green","🟢"],["yellow","🟡"],["red","🔴"]].forEach(([s, dot])=>{
+        const b = document.createElement('button');
+        b.className = `btn status-btn ${s}`;
+        b.textContent = `${dot} ${s.toUpperCase()}`;
+        b.onclick = async ()=>{
+          b.disabled = true;
+          try {
+            const { error } = await sb.client.from('rooms').update({ status: s }).eq('id', r.id);
+            if (error) throw error;
+            r.status = s;
+            card.querySelector('.status-dot').className = `status-dot ${sb.dotClass(s)}`;
+            const bd = card.querySelector('.badge'); bd.className = `badge ${s}`; bd.textContent = `${sb.statusEmoji(s)} ${sb.statusLabel(s)}`;
+            card.querySelector('.updated').textContent = "Updated: " + sb.formatTime(new Date().toISOString());
+          } catch(e){ alert(e.message); } finally { b.disabled = false; }
+        };
+        grid.appendChild(b);
+      });
+      card.querySelector(`#cpy-${r.id}`).onclick = async ()=>{ try{ await navigator.clipboard.writeText(sb.roomUrl(r.public_slug)); }catch{} };
+      return card;
+    }
+
+    async function loadMyRooms(){
+      const { data: { session } } = await sb.client.auth.getSession();
+      if (!session) return;
+      const { data, error } = await sb.client
+        .from('rooms')
+        .select('id,name,status,public_slug,updated_at')
+        .eq('owner_id', session.user.id)
+        .order('name', { ascending: true });
+      if (error){ setMsg(error.message); return; }
+      E.rooms.innerHTML = "";
+      if (!data || !data.length){
+        E.rooms.innerHTML = '<div class="card"><p class="muted">No rooms assigned yet.</p></div>';
+        return;
+      }
+      data.forEach(r => E.rooms.appendChild(roomCard(r)));
+    }
+
+    (async ()=>{
+      try {
+        await readyClient();
+
+        // Public board link
+        const boardUrl = new URL("./index.html", location.href).toString();
+        if (E.board) E.board.value = boardUrl;
+        if (E.copyBoard) E.copyBoard.onclick = async ()=>{
+          try{ await navigator.clipboard.writeText(boardUrl); if(E.shareMsg){ E.shareMsg.textContent="Copied."; setTimeout(()=>E.shareMsg.textContent="",1200); } }catch{}
+        };
+
+        // Initial session/UI
+        const sess = (await sb.client.auth.getSession()).data.session;
+        showDash(!!sess);
+        if (sess) await loadMyRooms();
+
+        // Sign-in
+        if (E.form){
+          E.form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            if (E.btn) E.btn.disabled = true;
+            setMsg("Signing in…");
+            try {
+              const { error } = await sb.client.auth.signInWithPassword({
+                email: E.email?.value.trim(),
+                password: E.pass?.value
+              });
+              if (error) throw error;
+              if (E.email) E.email.value = "";
+              if (E.pass)  E.pass.value  = "";
+              setMsg("");
+              showDash(true);
+              await loadMyRooms();
+            } catch(err){ setMsg(err.message || String(err)); }
+            finally { if (E.btn) E.btn.disabled = false; }
+          });
+        }
+
+        // Sign-out
+        E.signout?.addEventListener('click', async ()=>{ await sb.client.auth.signOut(); showDash(false); });
+
+        // Auth change listener
+        sb.client.auth.onAuthStateChange(async (_ev, s)=>{ showDash(!!s); if (s) await loadMyRooms(); });
+
+        // Polling fallback
+        setInterval(loadMyRooms, 10000);
+      } catch (e) {
+        setMsg(e.message);
+        console.error("[admin] init error:", e);
+      }
+    })();
+  })();
+  </script>
+</body>
+</html>
