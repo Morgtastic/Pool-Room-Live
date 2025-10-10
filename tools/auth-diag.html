@@ -4,67 +4,77 @@
   <meta charset="utf-8"/>
   <title>Auth Diagnostics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <!-- 1) SDK first -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="../js/supabaseClient.js"></script>
+  <!-- 2) Your client (relative path from /tools/) -->
+  <script defer src="../js/supabaseClient.js?v=2"></script>
 </head>
 <body style="font-family:system-ui;max-width:760px;margin:24px auto;padding:16px">
   <h1>Auth Diagnostics</h1>
 
-  <section style="margin:12px 0">
-    <h3>Environment</h3>
-    <pre id="env" style="background:#111;color:#eee;padding:12px;border-radius:8px"></pre>
-  </section>
+  <h3>Environment</h3>
+  <pre id="env" style="background:#111;color:#eee;padding:12px;border-radius:8px;white-space:pre-wrap"></pre>
 
-  <section style="margin:12px 0">
-    <h3>Check current session</h3>
-    <button id="check">Check Session</button>
-    <pre id="session" style="background:#111;color:#eee;padding:12px;border-radius:8px;white-space:pre-wrap"></pre>
-  </section>
+  <h3>Session</h3>
+  <button id="check">Check Session</button>
+  <pre id="session" style="background:#111;color:#eee;padding:12px;border-radius:8px;white-space:pre-wrap"></pre>
 
-  <section style="margin:12px 0">
-    <h3>Test sign-in (password)</h3>
-    <form id="signin" style="display:flex;gap:8px;flex-wrap:wrap">
-      <input id="email" type="email" placeholder="owner@example.com" required style="flex:1;padding:10px;border:1px solid #ccc;border-radius:8px"/>
-      <input id="password" type="password" placeholder="password" required style="flex:1;padding:10px;border:1px solid #ccc;border-radius:8px"/>
-      <button>Sign In</button>
-    </form>
-    <pre id="signin-out" style="background:#111;color:#eee;padding:12px;border-radius:8px;white-space:pre-wrap"></pre>
-  </section>
+  <h3>Query test</h3>
+  <button id="test">Test rooms SELECT (head)</button>
+  <pre id="qry" style="background:#111;color:#eee;padding:12px;border-radius:8px;white-space:pre-wrap"></pre>
 
   <script>
-    const outEnv = document.getElementById('env');
-    const outSess = document.getElementById('session');
-    const outSign = document.getElementById('signin-out');
+    const env = document.getElementById('env');
+    const sessionOut = document.getElementById('session');
+    const qryOut = document.getElementById('qry');
 
     (async () => {
-      outEnv.textContent = [
-        `URL: ${typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '(missing)'}`,
-        `Anon key present: ${typeof SUPABASE_ANON_KEY !== 'undefined' && !SUPABASE_ANON_KEY.includes('YOUR-ANON-KEY')}`
-      ].join('\n');
+      try {
+        if (!window.supabase) { env.textContent = 'ERROR: Supabase SDK missing.'; return; }
+        if (!window.sb || !sb.client) {
+          env.textContent = 'ERROR: sb.client missing. Check path ../js/supabaseClient.js';
+          return;
+        }
+        // Read from actual client rather than globals
+        const clientUrl = sb.client.rest?.url || '(unknown)';
+        env.textContent = [
+          `Client URL (from sb.client): ${clientUrl}`,
+          `Client present: ${!!sb.client}`,
+          `Note: We no longer rely on window.SUPABASE_URL/ANON_KEY`
+        ].join('\n');
+      } catch (e) {
+        env.textContent = 'ENV ERROR: ' + (e?.message || e);
+      }
     })();
 
     document.getElementById('check').onclick = async () => {
-      const { data, error } = await sb.client.auth.getSession();
-      outSess.textContent = error ? ('ERROR: ' + error.message) :
-        JSON.stringify({
-          hasSession: !!data.session,
-          userId: data.session?.user?.id,
-          email: data.session?.user?.email,
-          expiresAt: data.session?.expires_at
-        }, null, 2);
+      try {
+        const { data, error } = await sb.client.auth.getSession();
+        sessionOut.textContent = error
+          ? ('ERROR: ' + error.message)
+          : JSON.stringify({
+              hasSession: !!data.session,
+              userId: data.session?.user?.id,
+              email: data.session?.user?.email,
+              expiresAt: data.session?.expires_at
+            }, null, 2);
+      } catch (e) {
+        sessionOut.textContent = 'SESSION ERROR: ' + (e?.message || e);
+      }
     };
 
-    document.getElementById('signin').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      outSign.textContent = 'Signing in…';
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      const { data, error } = await sb.client.auth.signInWithPassword({ email, password });
-      if (error) { outSign.textContent = 'ERROR: ' + error.message; return; }
-      outSign.textContent = 'OK: signed in\n' + JSON.stringify({
-        userId: data.user?.id, email: data.user?.email
-      }, null, 2);
-    });
+    document.getElementById('test').onclick = async () => {
+      try {
+        const { error, count } = await sb.client
+          .from('rooms')
+          .select('id', { head: true, count: 'exact' });
+        qryOut.textContent = error
+          ? ('QUERY ERROR: ' + error.message)
+          : ('QUERY OK. Rooms count (server-estimated): ' + count);
+      } catch (e) {
+        qryOut.textContent = 'QUERY EXCEPTION: ' + (e?.message || e);
+      }
+    };
   </script>
 </body>
 </html>
