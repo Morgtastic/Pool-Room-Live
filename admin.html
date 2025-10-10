@@ -192,5 +192,114 @@
     })();
   })();
   </script>
+  <script>
+/* Minimal guaranteed handler: runs even if addEventListener failed earlier */
+window.__signin = async function (e) {
+  try {
+    if (e) e.preventDefault();
+    const emailEl = document.getElementById('email');
+    const passEl  = document.getElementById('pass');
+    const msgEl   = document.getElementById('auth-msg');
+    const btnEl   = document.getElementById('signin-btn');
+
+    if (!window.supabase || !window.sb || !sb.client) {
+      if (msgEl) msgEl.textContent = "Client not ready. Check SDK/client tags.";
+      console.error("Client missing");
+      return false;
+    }
+
+    const email = (emailEl?.value || "").trim();
+    const pass  = passEl?.value || "";
+    if (!email || !pass) {
+      if (msgEl) msgEl.textContent = "Enter email and password.";
+      return false;
+    }
+
+    if (btnEl) btnEl.disabled = true;
+    if (msgEl) msgEl.textContent = "Signing in…";
+
+    const { error } = await sb.client.auth.signInWithPassword({ email, password: pass });
+    if (error) {
+      if (msgEl) msgEl.textContent = error.message;
+      console.error("Sign-in error:", error.message);
+      return false;
+    }
+
+    // Success: clear fields, flip UI
+    if (emailEl) emailEl.value = "";
+    if (passEl)  passEl.value  = "";
+    if (msgEl)   msgEl.textContent = "";
+
+    // Show dashboard section, hide auth section
+    const authPanel = document.getElementById('auth-panel');
+    const dashPanel = document.getElementById('dash-panel');
+    if (authPanel) authPanel.classList.add('hidden');
+    if (dashPanel) dashPanel.classList.remove('hidden');
+
+    // Load rooms
+    try {
+      const { data: { session } } = await sb.client.auth.getSession();
+      if (session) {
+        const wrap = document.getElementById('rooms-wrap');
+        if (wrap) {
+          const { data, error: selErr } = await sb.client
+            .from('rooms')
+            .select('id,name,status,public_slug,updated_at')
+            .eq('owner_id', session.user.id)
+            .order('name', { ascending: true });
+          if (selErr) {
+            if (msgEl) msgEl.textContent = selErr.message;
+          } else {
+            wrap.innerHTML = "";
+            if (!data || !data.length) {
+              wrap.innerHTML = '<div class="card"><p class="muted">No rooms assigned yet.</p></div>';
+            } else {
+              data.forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `
+                  <div class="row between">
+                    <h3><span class="status-dot ${sb.dotClass(r.status)}"></span> ${r.name}</h3>
+                    <span class="badge ${r.status}">${sb.statusEmoji(r.status)} ${sb.statusLabel(r.status)}</span>
+                  </div>
+                  <div class="updated">Updated: ${sb.formatTime(r.updated_at)}</div>
+                  <div class="status-grid" id="btns-${r.id}"></div>`;
+                const grid = div.querySelector(`#btns-${r.id}`);
+                [["green","🟢"],["yellow","🟡"],["red","🔴"]].forEach(([s,d])=>{
+                  const b=document.createElement('button'); b.className=`btn status-btn ${s}`; b.textContent=`${d} ${s.toUpperCase()}`;
+                  b.onclick=async()=>{ b.disabled=true; try{
+                    const { error } = await sb.client.from('rooms').update({ status:s }).eq('id', r.id);
+                    if (error) throw error;
+                    r.status=s;
+                    div.querySelector('.status-dot').className=`status-dot ${sb.dotClass(s)}`;
+                    const bd=div.querySelector('.badge'); bd.className=`badge ${s}`; bd.textContent=`${sb.statusEmoji(s)} ${sb.statusLabel(s)}`;
+                    div.querySelector('.updated').textContent="Updated: "+sb.formatTime(new Date().toISOString());
+                  } catch(e){ alert(e.message);} finally{ b.disabled=false; } };
+                  grid.appendChild(b);
+                });
+                wrap.appendChild(div);
+              });
+            }
+          }
+        }
+      }
+    } catch (e2) {
+      console.error("Post-login load error:", e2);
+    }
+
+    return false; // prevent navigation
+  } finally {
+    const btnEl = document.getElementById('signin-btn');
+    if (btnEl) btnEl.disabled = false;
+  }
+};
+
+// Bind the button directly as a fallback (even if form listener fails)
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('signin-btn');
+  if (btn) btn.addEventListener('click', window.__signin);
+});
+</script>
+
 </body>
 </html>
