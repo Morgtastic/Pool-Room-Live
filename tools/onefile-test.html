@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Supabase One-File Test</title>
+<pre id="out" style="font:14px/1.4 system-ui; white-space:pre-wrap"></pre>
+
+<!-- Load the UMD build directly from the CDN (no module imports, no local files). -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+<script>
+  const out = document.getElementById('out');
+  function log(msg){ out.textContent += (out.textContent ? "\n" : "") + msg; }
+
+  // 1) Check SDK global
+  log("SDK present (typeof window.supabase): " + typeof window.supabase);
+
+  // 2) Create client with YOUR values
+  const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co"; // <- your project URL
+  const SUPABASE_ANON_KEY = "eyJ..."; // <- your anon public key (starts with eyJ)
+  try {
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    });
+    log("Client created: " + !!client);
+    log("Client URL: " + (client?.rest?.url || "(unknown)"));
+
+    // 3) Tiny round-trip to prove it works (non-fatal if policies block)
+    client.from("rooms").select("id", { head: true, count: "exact" })
+      .then(({ error }) => log("Rooms head-select error: " + (error?.message || "none")))
+      .catch(e => log("Rooms head-select exception: " + e.message));
+  } catch (e) {
+    log("createClient threw: " + e.message);
+  }
+</script>
