@@ -1,3 +1,19 @@
+<script type="module" src="../vendor/supabase-global.js?v=1"></script>
+<script defer src="../js/supabaseClient.js?v=2"></script>
+<script>
+  (async () => {
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    let waited = 0;
+    while (waited < 6000 && (!window.supabase || !window.sb || !sb.client)) { await wait(300); waited += 300; }
+    if (!window.supabase) {
+      const b = document.createElement('div'); b.style.cssText="position:fixed;left:0;right:0;top:0;background:#b00020;color:#fff;padding:10px 14px;font:14px system-ui;z-index:99999"; b.textContent="Supabase SDK missing. Check ../vendor/supabase-global.js tag."; document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
+    } else if (!window.sb || !sb.client) {
+      const b = document.createElement('div'); b.style.cssText="position:fixed;left:0;right:0;top:0;background:#b00020;color:#fff;padding:10px 14px;font:14px system-ui;z-index:99999"; b.textContent="Supabase client missing. Check ../js/supabaseClient.js and your anon key."; document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
+    }
+  })();
+</script>
+
+
 // /js/publicBoard.js
 (async () => {
   const supabase = sb.client;
