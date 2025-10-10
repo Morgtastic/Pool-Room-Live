@@ -1,0 +1,127 @@
+<!-- FILE: /tools/onefile-board.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Live Board — Single File</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --br:#1f2937; }
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:var(--text)}
+    a{color:#e5e7eb;text-decoration:none}
+    .container{max-width:900px;margin:24px auto;padding:12px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111827;border-bottom:1px solid var(--br)}
+    .card{background:#111827;border:1px solid var(--br);border-radius:12px;padding:16px;margin:12px 0}
+    .muted{color:var(--muted)} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .row{display:flex;gap:8px;align-items:center} .between{justify-content:space-between}
+    .status-dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:6px;vertical-align:middle}
+    .dot-green{background:#16a34a}.dot-yellow{background:#f59e0b}.dot-red{background:#ef4444}
+    .badge{padding:6px 10px;border-radius:999px;border:1px solid #334155}
+    .updated{margin-top:6px;color:var(--muted);font-size:0.9rem}
+  </style>
+
+  <!-- Supabase SDK (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <!-- Inline client (edit URL + anon key below) -->
+  <script>
+    const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co";      // <-- YOUR URL
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXdlYW5oeHh3bHZubWlzYmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMjUxMjksImV4cCI6MjA3NTYwMTEyOX0.FaQeS9jH3WFgFGkSipjaj3lgPdm5Xoo-hGikXzWRqvg"; // <-- YOUR anon key
+
+    window.sb = window.sb || {};
+    sb.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+    // tiny helpers
+    sb.statusLabel = (s)=>({green:"Open / No wait",yellow:"Moderate wait",red:"Full / Busy"}[s]??s);
+    sb.statusEmoji = (s)=>({green:"🟢",yellow:"🟡",red:"🔴"}[s]??"❓");
+    sb.dotClass    = (s)=>({green:"dot-green",yellow:"dot-yellow",red:"dot-red"}[s]??"dot-red");
+    sb.formatTime  = (iso)=>{ try{return new Date(iso).toLocaleString();}catch{return"";} };
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Live Board</h1>
+    <a href="../tools/onefile-admin.html">Owner Dashboard</a>
+  </header>
+
+  <main class="container">
+    <div class="card"><h2>Status</h2><div class="muted">🟢 Open • 🟡 Moderate wait • 🔴 Full</div></div>
+    <div id="status" class="muted mono">Loading Rooms…</div>
+    <div id="rooms"></div>
+  </main>
+
+  <script>
+    (function(){
+      const statusEl = document.getElementById('status');
+      const roomsEl  = document.getElementById('rooms');
+
+      const dot = (s)=>`<span class="status-dot ${sb.dotClass(s)}"></span>`;
+      const cardHtml = (r)=>`
+        <div class="card" data-id="${r.id}">
+          <div class="row between">
+            <h3>${dot(r.status)} ${r.name}</h3>
+            <span class="badge ${r.status}">${sb.statusEmoji(r.status)} ${sb.statusLabel(r.status)}</span>
+          </div>
+          <div class="updated">Updated: ${sb.formatTime(r.updated_at)}</div>
+        </div>`;
+
+      function render(list){
+        roomsEl.innerHTML = "";
+        if (!list || !list.length){
+          statusEl.textContent = "No rooms yet.";
+          return;
+        }
+        statusEl.textContent = "";
+        roomsEl.innerHTML = list.map(cardHtml).join("");
+      }
+
+      async function load(){
+        // single-room filter support: ?room=public_slug
+        const slug = new URLSearchParams(location.search).get('room')?.trim();
+        let q = sb.client.from('rooms').select('id,name,status,public_slug,updated_at').order('name',{ascending:true});
+        if (slug) q = q.eq('public_slug', slug);
+        const { data, error } = await q;
+        if (error){ statusEl.textContent = "Error: "+error.message; return; }
+        render(data);
+      }
+
+      function subscribe(){
+        const slug = new URLSearchParams(location.search).get('room')?.trim();
+        sb.client
+          .channel('rooms_live_board')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, (p)=>{
+            const r = p.new || p.old;
+            if (slug && r.public_slug !== slug) return;
+
+            if (p.eventType === 'DELETE'){
+              const n = roomsEl.querySelector(`[data-id="${r.id}"]`); if (n) n.remove();
+              if (!roomsEl.children.length) statusEl.textContent = slug ? "No matching room." : "No rooms yet.";
+              return;
+            }
+            if (p.eventType === 'INSERT'){
+              roomsEl.insertAdjacentHTML('beforeend', cardHtml(p.new));
+              statusEl.textContent = "";
+              return;
+            }
+            if (p.eventType === 'UPDATE'){
+              let n = roomsEl.querySelector(`[data-id="${r.id}"]`);
+              if (!n){ roomsEl.insertAdjacentHTML('beforeend', cardHtml(p.new)); statusEl.textContent=""; return; }
+              n.querySelector('.status-dot').className = `status-dot ${sb.dotClass(p.new.status)}`;
+              const b = n.querySelector('.badge'); b.className = `badge ${p.new.status}`; b.textContent = `${sb.statusEmoji(p.new.status)} ${sb.statusLabel(p.new.status)}`;
+              n.querySelector('.updated').textContent = "Updated: " + sb.formatTime(p.new.updated_at);
+            }
+          })
+          .subscribe();
+      }
+
+      // boot
+      load();
+      subscribe();
+      setInterval(load, 20000);
+    })();
+  </script>
+</body>
+</html>
