@@ -26,7 +26,10 @@
       <form id="signin-form" class="vstack" onsubmit="return false;">
         <input id="email" type="email" placeholder="Email" autocomplete="email" required />
         <input id="pass" type="password" placeholder="Password" autocomplete="current-password" required />
-        <button id="signin-btn" type="submit" class="btn primary">Sign In</button>
+        <button id="signin-btn" type="submit" class="btn primary" onclick="return window.__signin && window.__signin(event)">
+  Sign In
+</button>
+
         <div id="auth-msg" class="muted mono"></div>
       </form>
     </section>
