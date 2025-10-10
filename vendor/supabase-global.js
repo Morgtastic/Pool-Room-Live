@@ -1,11 +1,24 @@
-// /vendor/supabase-global.js  (ES module loader)
-export default (async function load() {
-  try {
-    const mod = await import('https://esm.sh/@supabase/supabase-js@2?bundle&target=es2019');
-    window.supabase = { createClient: mod.createClient };
-  } catch (e) {
-    const mod = await import('https://unpkg.com/@supabase/supabase-js@2?module');
-    window.supabase = { createClient: mod.createClient };
+// /vendor/supabase-global.js
+// Robust loader: injects UMD script tag; fires 'supabase-ready' on success.
+(function loadSupabaseUMD() {
+  function ok() {
+    // UMD exposes global window.supabase
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      window.dispatchEvent(new Event('supabase-ready'));
+    } else {
+      console.error('[supabase-global] UMD loaded but window.supabase missing.');
+    }
   }
-  window.dispatchEvent(new Event('supabase-ready'));
+  function add(src, onerror) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.defer = true;
+    s.onload = ok;
+    s.onerror = onerror || function(e){ console.error('[supabase-global] failed:', src); };
+    document.head.appendChild(s);
+  }
+  // Try jsDelivr UMD, then fallback to unpkg UMD
+  add('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js', function(){
+    add('https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js');
+  });
 })();
