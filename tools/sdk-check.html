@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Supabase SDK Check</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Load the browser-global (UMD) build explicitly -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Fallback if jsDelivr fails -->
+  <script>
+    window.addEventListener('error', function onErr(e) {
+      if (String(e.filename||'').includes('@supabase/supabase-js@2') && !window.__FELLBACK__) {
+        window.__FELLBACK__ = true;
+        var alt = document.createElement('script');
+        alt.defer = true;
+        alt.src = "https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js";
+        document.head.appendChild(alt);
+      }
+    }, true);
+  </script>
+
+  <!-- Your client file (so we also test it loads) -->
+  <script defer src="../js/supabaseClient.js?v=4"></script>
+</head>
+<body style="font-family:system-ui;max-width:760px;margin:24px auto;padding:16px">
+  <h1>Supabase SDK & Client Check</h1>
+  <pre id="out" style="white-space:pre-wrap;background:#111;color:#eee;padding:12px;border-radius:8px"></pre>
+
+  <script>
+    const out = document.getElementById('out');
+    (async () => {
+      const lines = [];
+
+      // 1) SDK present?
+      lines.push("SDK present (window.supabase): " + !!window.supabase);
+
+      // 2) Client present?
+      lines.push("Client present (sb.client): " + (!!window.sb && !!sb.client));
+
+      // 3) If client exists, show its base URL and try a lightweight auth call
+      if (window.sb && sb.client) {
+        lines.push("Client REST URL: " + (sb.client.rest?.url || "(unknown)"));
+        try {
+          const { data, error } = await sb.client.auth.getSession();
+          lines.push("Auth session exists: " + (!!data?.session));
+          if (error) lines.push("Auth error: " + error.message);
+        } catch (e) {
+          lines.push("Auth exception: " + (e?.message || e));
+        }
+      }
+
+      out.textContent = lines.join("\n");
+    })();
+  </script>
+</body>
+</html>
