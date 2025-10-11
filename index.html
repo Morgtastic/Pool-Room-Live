@@ -183,7 +183,8 @@
             const h = hours[k];
             if (!h || h.closed) return `<div>${label[k]}: Closed</div>`;
             const overnight = h.close && h.open && hmToMin(h.close) <= hmToMin(h.open);
-            return `<div>${label[k]}: ${h.open||'—'}–${h.close||'—'}${overnight?' (overnight)':''}</div>`;
+            return `<div>${label[k]}: ${h.open ? to12h(h.open) : '—'}–${h.close ? to12h(h.close) : '—'}${overnight ? ' (overnight)' : ''}</div>`;
+
           }).join('')}
         </div>`;
       }
