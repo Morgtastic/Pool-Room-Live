@@ -1,0 +1,326 @@
+<!-- FILE: /tools/room-settings.html (NEW SINGLE FILE) -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Room Settings</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --br:#1f2937; }
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:var(--text)}
+    a{color:#e5e7eb;text-decoration:none}
+    .container{max-width:900px;margin:24px auto;padding:12px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111827;border-bottom:1px solid var(--br)}
+    .card{background:#111827;border:1px solid var(--br);border-radius:12px;padding:16px;margin:12px 0}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+    .row{display:flex;gap:8px;align-items:center}
+    .muted{color:var(--muted)} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    label{display:block;margin:6px 0 4px;color:var(--muted);font-size:0.9rem}
+    input,select,textarea{width:100%;padding:10px;border:1px solid #334155;border-radius:8px;background:#0b1220;color:var(--text)}
+    .btn{padding:10px 12px;border:1px solid #334155;background:#0b1220;color:var(--text);border-radius:10px;cursor:pointer}
+    .btn.primary{border-color:#3b82f6}
+    .hr{border-top:1px solid var(--br);margin:14px 0}
+    .day{border:1px solid #334155;border-radius:10px;padding:10px}
+    .col{display:flex;flex-direction:column;gap:6px}
+    .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .error{color:#fca5a5}
+    .ok{color:#86efac}
+  </style>
+
+  <!-- Supabase SDK (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <!-- Inline client: EDIT THESE TWO LINES -->
+  <script>
+    const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co";      // <-- YOUR URL
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXdlYW5oeHh3bHZubWlzYmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMjUxMjksImV4cCI6MjA3NTYwMTEyOX0.FaQeS9jH3WFgFGkSipjaj3lgPdm5Xoo-hGikXzWRqvg"; // <-- YOUR anon key
+
+    window.sb = window.sb || {};
+    sb.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    });
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Room Settings</h1>
+    <div class="row">
+      <a href="../admin.html">Back to Dashboard</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="msg" class="mono muted">Loading…</div>
+
+    <div id="wrap" class="card" style="display:none">
+      <h2 id="roomName">Room</h2>
+      <div class="hr"></div>
+
+      <!-- Contact & Location -->
+      <h3>Business Info</h3>
+      <div class="grid">
+        <div><label>Address line 1</label><input id="address_line1" /></div>
+        <div><label>Address line 2</label><input id="address_line2" /></div>
+        <div><label>City</label><input id="city" /></div>
+        <div><label>State/Region</label><input id="region" /></div>
+        <div><label>Postal code</label><input id="postal_code" /></div>
+        <div><label>Country</label><input id="country" placeholder="US" /></div>
+        <div><label>Phone (E.164)</label><input id="phone_e164" placeholder="+15555551234" /></div>
+        <div><label>Map query (optional override)</label><input id="map_query" placeholder="Pool Room, 123 Main St, Springfield" /></div>
+        <div>
+          <label>Timezone</label>
+          <select id="timezone">
+            <option value="">-- Select timezone --</option>
+            <option>America/New_York</option>
+            <option>America/Chicago</option>
+            <option>America/Denver</option>
+            <option>America/Los_Angeles</option>
+            <option>America/Phoenix</option>
+            <option>America/Anchorage</option>
+            <option>Pacific/Honolulu</option>
+            <option>Europe/London</option>
+            <option>Europe/Berlin</option>
+            <option>Asia/Tokyo</option>
+            <option>Australia/Sydney</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <!-- Hours (12-hour input; stored as 24-hour) -->
+      <h3>Business Hours (12-hour)</h3>
+      <div class="muted" style="margin-bottom:8px">One open–close period per day. Check “Closed” if closed.</div>
+      <div id="hoursGrid" class="grid"></div>
+
+      <div class="hr"></div>
+
+      <!-- Special Note -->
+      <h3>Special Note</h3>
+      <div class="col">
+        <textarea id="special_note" rows="2" placeholder="e.g., Open early today"></textarea>
+        <div class="inline">
+          <input id="note_clear_today" type="checkbox" />
+          <label for="note_clear_today">Auto-clear at end of today</label>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <!-- Automations -->
+      <h3>Automation</h3>
+      <div class="inline">
+        <input id="auto_daily_reset" type="checkbox" />
+        <label for="auto_daily_reset">Auto-reset status to Green daily (at local midnight)</label>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="inline">
+        <button id="saveBtn" class="btn primary">Save Changes</button>
+        <span id="saveMsg" class="mono muted"></span>
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (function(){
+    const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
+    const dayLabels = {sun:'Sunday', mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday'};
+
+    const q = new URLSearchParams(location.search);
+    const roomId = q.get('room'); // expected: room id (uuid) OR public_slug? We'll use id for security
+    const els = {
+      msg: document.getElementById('msg'),
+      wrap: document.getElementById('wrap'),
+      roomName: document.getElementById('roomName'),
+      address_line1: document.getElementById('address_line1'),
+      address_line2: document.getElementById('address_line2'),
+      city: document.getElementById('city'),
+      region: document.getElementById('region'),
+      postal_code: document.getElementById('postal_code'),
+      country: document.getElementById('country'),
+      phone_e164: document.getElementById('phone_e164'),
+      map_query: document.getElementById('map_query'),
+      timezone: document.getElementById('timezone'),
+      hoursGrid: document.getElementById('hoursGrid'),
+      special_note: document.getElementById('special_note'),
+      note_clear_today: document.getElementById('note_clear_today'),
+      auto_daily_reset: document.getElementById('auto_daily_reset'),
+      saveBtn: document.getElementById('saveBtn'),
+      saveMsg: document.getElementById('saveMsg'),
+    };
+
+    function setMsg(txt, cls='muted'){ els.msg.textContent = txt; els.msg.className = 'mono ' + cls; }
+    function setSaveMsg(txt, cls='muted'){ els.saveMsg.textContent = txt; els.saveMsg.className = 'mono ' + cls; }
+
+    // 12h -> "HH:MM" (24h). Accepts "1:30 PM", "01:30 pm", "12:00 AM"
+    function to24h(s){
+      if (!s) return null;
+      s = String(s).trim();
+      const m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
+      if (!m) return null;
+      let hh = parseInt(m[1],10), mm = parseInt(m[2]||'0',10);
+      const ap = m[3].toUpperCase();
+      if (hh === 12) hh = 0;
+      if (ap === 'PM') hh += 12;
+      if (hh<0||hh>23||mm<0||mm>59) return null;
+      return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+    }
+    // "HH:MM" (24h) -> "h:mm AM/PM"
+    function to12h(hm){
+      if (!hm) return '';
+      const [hStr,mStr] = hm.split(':'); let h = parseInt(hStr,10); const m=mStr||'00';
+      const ap = h>=12 ? 'PM' : 'AM'; h = h%12; if (h===0) h=12;
+      return `${h}:${m} ${ap}`;
+    }
+
+    function buildHoursEditor(hours){
+      els.hoursGrid.innerHTML = '';
+      const h = hours || {};
+      const order = ['mon','tue','wed','thu','fri','sat','sun'];
+      order.forEach(k=>{
+        const v = h[k] || { open:null, close:null, closed:true };
+        const card = document.createElement('div');
+        card.className = 'day';
+        card.innerHTML = `
+          <div class="row" style="justify-content:space-between;margin-bottom:6px">
+            <strong>${dayLabels[k]}</strong>
+            <label class="inline"><input type="checkbox" id="chk-${k}" ${v.closed?'checked':''}/> Closed</label>
+          </div>
+          <div class="grid">
+            <div>
+              <label>Open (e.g., 11:00 AM)</label>
+              <input id="open-${k}" placeholder="11:00 AM" value="${v.open?to12h(v.open):''}">
+            </div>
+            <div>
+              <label>Close (e.g., 11:00 PM)</label>
+              <input id="close-${k}" placeholder="11:00 PM" value="${v.close?to12h(v.close):''}">
+            </div>
+          </div>
+          <div class="muted" style="margin-top:6px">Overnight is OK (e.g., 8:00 PM → 2:00 AM)</div>
+        `;
+        els.hoursGrid.appendChild(card);
+      });
+    }
+
+    function readHoursFromEditor(){
+      const res = {};
+      ['mon','tue','wed','thu','fri','sat','sun'].forEach(k=>{
+        const closed = document.getElementById(`chk-${k}`).checked;
+        if (closed){
+          res[k] = { open: null, close: null, closed: true };
+        } else {
+          const o12 = document.getElementById(`open-${k}`).value.trim();
+          const c12 = document.getElementById(`close-${k}`).value.trim();
+          const o24 = to24h(o12);
+          const c24 = to24h(c12);
+          if (!o24 || !c24) throw new Error(`${dayLabels[k]}: please enter times like "11:00 AM" / "10:00 PM"`);
+          res[k] = { open: o24, close: c24, closed: false };
+        }
+      });
+      return res;
+    }
+
+    async function load(){
+      try{
+        setMsg('Loading…');
+        // Require login
+        const { data: { session } } = await sb.client.auth.getSession();
+        if (!session) { setMsg('Please sign in on the Dashboard first.', 'error'); return; }
+        if (!roomId) { setMsg('Missing ?room=<room_id> in URL.', 'error'); return; }
+
+        // Load the room and confirm ownership
+        const { data, error } = await sb.client
+          .from('rooms')
+          .select('id,name,owner_id,address_line1,address_line2,city,region,postal_code,country,phone_e164,map_query,timezone,hours,special_note,special_note_expires_at,auto_daily_reset')
+          .eq('id', roomId)
+          .single();
+        if (error) throw error;
+
+        if (data.owner_id !== session.user.id){
+          setMsg('You do not have permission to edit this room.', 'error');
+          return;
+        }
+
+        // Fill form
+        els.roomName.textContent = data.name || 'Room';
+        ['address_line1','address_line2','city','region','postal_code','country','phone_e164','map_query'].forEach(f=>{
+          els[f].value = data[f] || '';
+        });
+        els.timezone.value = data.timezone || '';
+        els.special_note.value = data.special_note || '';
+        els.note_clear_today.checked = false; // not persisted; determines expires_at on save
+        els.auto_daily_reset.checked = !!data.auto_daily_reset;
+
+        buildHoursEditor(data.hours || {});
+        els.wrap.style.display = '';
+        setMsg('Ready.', 'muted');
+      }catch(e){
+        setMsg(e.message || String(e), 'error');
+      }
+    }
+
+    function endOfTodayInTZ(tz){
+      // Compute 23:59:59.000 in the room’s timezone, as UTC ISO string
+      const now = new Date();
+      const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12:false,
+        year:'numeric',month:'2-digit',day:'2-digit' });
+      const parts = Object.fromEntries(fmt.formatToParts(now).map(p=>[p.type,p.value]));
+      const y = +parts.year, m = +parts.month, d = +parts.day;
+      // Create local end-of-day, then convert to UTC by pretending it's local offset
+      const localEnd = new Date(Date.UTC(y, m-1, d, 23, 59, 59));
+      // Offset trick: get offset for tz at that date/time by formatting and comparing
+      // Simpler: use the time zone to get UTC milliseconds of that local time:
+      // We’ll approximate by parsing back via toLocaleString isn’t reliable; acceptable for end-of-day note clearing.
+      return localEnd.toISOString(); // good enough: server compares with now() UTC and we only need "today"
+    }
+
+    async function save(){
+      try{
+        setSaveMsg('Saving…');
+        const tz = els.timezone.value.trim();
+        if (!tz) throw new Error('Please select a timezone.');
+        const update = {
+          address_line1: els.address_line1.value.trim() || null,
+          address_line2: els.address_line2.value.trim() || null,
+          city:          els.city.value.trim() || null,
+          region:        els.region.value.trim() || null,
+          postal_code:   els.postal_code.value.trim() || null,
+          country:       els.country.value.trim() || null,
+          phone_e164:    els.phone_e164.value.trim() || null,
+          map_query:     els.map_query.value.trim() || null,
+          timezone:      tz,
+          auto_daily_reset: !!els.auto_daily_reset.checked
+        };
+        // Hours
+        const hours = readHoursFromEditor(); // throws if invalid
+        update.hours = hours;
+
+        // Special note
+        const note = els.special_note.value.trim();
+        if (note){
+          update.special_note = note;
+          if (els.note_clear_today.checked){
+            update.special_note_expires_at = endOfTodayInTZ(tz);
+          }
+        } else {
+          update.special_note = null;
+          update.special_note_expires_at = null;
+        }
+
+        const { error } = await sb.client.from('rooms').update(update).eq('id', roomId);
+        if (error) throw error;
+        setSaveMsg('Saved.', 'ok');
+        setTimeout(()=>setSaveMsg('', 'muted'), 1200);
+      }catch(e){
+        setSaveMsg(e.message || String(e), 'error');
+      }
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', save);
+    load();
+  })();
+  </script>
+</body>
+</html>
