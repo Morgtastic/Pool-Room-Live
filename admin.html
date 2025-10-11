@@ -121,6 +121,13 @@
           </div>
           <div class="updated">Updated: ${sb.formatTime(r.updated_at)}</div>
           <div class="status-grid" id="btns-${r.id}"></div>
+          <!-- TINY PATCH to your /admin.html room card (ADD an Edit link button)
+Find where each room card is built and add this next to the status buttons.
+Example for your existing card HTML builder: -->
+<div class="row wrap" style="margin-top:8px">
+  <button class="btn" onclick="location.href = './tools/room-settings.html?room=${r.id}'">Edit Business Info</button>
+</div>
+
           <div class="row wrap" style="margin-top:8px">
             <input class="input mono" value="${sb.roomUrl(r.public_slug)}" readonly />
             <button class="btn" id="cpy-${r.id}">Copy Room Link</button>
