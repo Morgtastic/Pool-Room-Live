@@ -46,6 +46,17 @@
     sb.dotClass    = (s)=>({green:"dot-green",yellow:"dot-yellow",red:"dot-red"}[s]??"dot-red");
     sb.formatTime  = (iso)=>{ try{return new Date(iso).toLocaleString();}catch{return"";} };
   </script>
+  <script>
+  function to12h(hm){
+    if (!hm) return '';
+    const [hStr,mStr] = hm.split(':');
+    let h = parseInt(hStr,10), m = (mStr ?? '00').padStart(2,'0');
+    const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12; if (h === 0) h = 12;
+    return `${h}:${m} ${ap}`;
+  }
+</script>
+
 </head>
 <body>
   <header class="topbar">
@@ -100,7 +111,8 @@
           // open from openM..1440 OR 0..closeM
           openNow = (nowM >= openM || nowM < closeM);
         }
-        const label = `${today.open}–${today.close}${overnight?' (overnight)':''}`;
+        const label = `${to12h(today.open)}–${to12h(today.close)}${overnight ? ' (overnight)' : ''}`;
+
         return { openNow, todayLabel: label };
       }
 
