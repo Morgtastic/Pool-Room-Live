@@ -1,0 +1,238 @@
+<!-- FILE: /index.html (REPLACE ENTIRE FILE) -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pool Rooms — Live Board</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Minimal styles -->
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --mut:#9ca3af; --br:#1f2937; }
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:var(--text)}
+    a{color:#e5e7eb;text-decoration:none}
+    .container{max-width:900px;margin:24px auto;padding:12px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111827;border-bottom:1px solid var(--br)}
+    .card{background:#111827;border:1px solid var(--br);border-radius:12px;padding:16px;margin:12px 0}
+    .row{display:flex;gap:8px;align-items:center} .between{justify-content:space-between}
+    .muted{color:var(--mut)} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .status-dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:6px;vertical-align:middle}
+    .dot-green{background:#16a34a}.dot-yellow{background:#f59e0b}.dot-red{background:#ef4444}
+    .badge{padding:6px 10px;border-radius:999px;border:1px solid #334155}
+    .updated{margin-top:6px;color:var(--mut);font-size:0.9rem}
+    .addr, .phone, .hours, .note{margin-top:8px}
+    .pill{border:1px solid #334155;border-radius:999px;padding:2px 8px;font-size:0.85rem;margin-left:8px}
+    details summary{cursor:pointer;list-style:none}
+    details summary::-webkit-details-marker{display:none}
+    .wrap{flex-wrap:wrap}
+  </style>
+
+  <!-- Supabase SDK (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <!-- Inline client (EDIT THESE TWO LINES) -->
+  <script>
+    const SUPABASE_URL = "https://gwiweanhxxwlvnmisbbl.supabase.co";      /* <- YOUR URL */
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXdlYW5oeHh3bHZubWlzYmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMjUxMjksImV4cCI6MjA3NTYwMTEyOX0.FaQeS9jH3WFgFGkSipjaj3lgPdm5Xoo-hGikXzWRqvg"; /* <- YOUR anon key */
+
+    window.sb = window.sb || {};
+    sb.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+    // helpers
+    sb.statusLabel = (s)=>({green:"Open / No wait",yellow:"Moderate wait",red:"Full / Busy"}[s]??s);
+    sb.statusEmoji = (s)=>({green:"🟢",yellow:"🟡",red:"🔴"}[s]??"❓");
+    sb.dotClass    = (s)=>({green:"dot-green",yellow:"dot-yellow",red:"dot-red"}[s]??"dot-red");
+    sb.formatTime  = (iso)=>{ try{return new Date(iso).toLocaleString();}catch{return"";} };
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Live Board</h1>
+    <a class="link" href="./admin.html">Owner Dashboard</a>
+  </header>
+
+  <main class="container">
+    <div class="card"><h2>Status</h2><div class="muted">🟢 Open • 🟡 Moderate wait • 🔴 Full</div></div>
+    <div id="status" class="muted mono">Loading Rooms…</div>
+    <div id="rooms"></div>
+  </main>
+
+  <script>
+    (function(){
+      const statusEl = document.getElementById('status');
+      const roomsEl  = document.getElementById('rooms');
+
+      const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
+      function tzNowParts(tz){
+        const d = new Date();
+        const fmt = new Intl.DateTimeFormat('en-US',{ timeZone: tz, hour12:false,
+          year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',weekday:'short'
+        });
+        const parts = Object.fromEntries(fmt.formatToParts(d).map(p=>[p.type,p.value]));
+        // map weekday short -> index 0..6
+        const wmap = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
+        return {
+          y: +parts.year, m: +parts.month, d: +parts.day,
+          hh: +parts.hour, mm: +parts.minute, ss: +parts.second,
+          dow: wmap[parts.weekday] ?? 0
+        };
+      }
+      function hmToMin(hm){ if(!hm) return null; const [h,m] = hm.split(':').map(Number); return (h*60 + (m||0)); }
+      function openState(hours, tz){
+        // returns { openNow:boolean, todayLabel:string }
+        if (!hours || !tz) return { openNow:false, todayLabel:'Hours unavailable' };
+        const now = tzNowParts(tz);
+        const todayKey = dayKeys[now.dow];
+        const today = hours[todayKey];
+        if (!today || today.closed) return { openNow:false, todayLabel:'Closed today' };
+        const openM = hmToMin(today.open);
+        const closeM = hmToMin(today.close);
+        if (openM==null || closeM==null) return { openNow:false, todayLabel:'Closed today' };
+
+        const nowM = now.hh*60 + now.mm;
+        const overnight = closeM <= openM; // e.g., 20:00 -> 02:00 next day
+        let openNow = false;
+        if (!overnight) {
+          openNow = (nowM >= openM && nowM < closeM);
+        } else {
+          // open from openM..1440 OR 0..closeM
+          openNow = (nowM >= openM || nowM < closeM);
+        }
+        const label = `${today.open}–${today.close}${overnight?' (overnight)':''}`;
+        return { openNow, todayLabel: label };
+      }
+
+      function mapLink(r){
+        if (r.map_query && r.map_query.trim()) {
+          return `https://maps.google.com/?q=${encodeURIComponent(r.map_query.trim())}`;
+        }
+        const parts = [r.address_line1, r.address_line2, r.city, r.region, r.postal_code, r.country]
+          .filter(Boolean).join(', ');
+        if (!parts) return null;
+        return `https://maps.google.com/?q=${encodeURIComponent(parts)}`;
+      }
+      function addressOneLine(r){
+        return [r.address_line1, r.city, r.region, r.postal_code].filter(Boolean).join(', ');
+      }
+      function phoneHref(r){
+        return r.phone_e164 && r.phone_e164.trim().startsWith('+') ? `tel:${r.phone_e164.trim()}` : null;
+      }
+      function noteVisible(r){
+        if (!r.special_note) return false;
+        if (!r.special_note_expires_at) return true;
+        try { return new Date(r.special_note_expires_at).getTime() > Date.now(); } catch { return false; }
+      }
+
+      const dot = (s)=>`<span class="status-dot ${sb.dotClass(s)}"></span>`;
+      function cardHtml(r){
+        const mapUrl = mapLink(r);
+        const addrText = addressOneLine(r);
+        const phoneUrl = phoneHref(r);
+        const { openNow, todayLabel } = openState(r.hours, r.timezone);
+
+        return `
+        <div class="card" data-id="${r.id}">
+          <div class="row between">
+            <h3>${dot(r.status)} ${r.name}</h3>
+            <span class="badge ${r.status}">${sb.statusEmoji(r.status)} ${sb.statusLabel(r.status)}</span>
+          </div>
+
+          <div class="addr">
+            ${addrText ? (mapUrl ? `<a href="${mapUrl}" target="_blank" rel="noopener">${addrText}</a>` : addrText) : `<span class="muted">Address not set</span>`}
+          </div>
+
+          <div class="phone">
+            ${phoneUrl ? `<a href="${phoneUrl}">${r.phone_e164}</a>` : `<span class="muted">Phone not set</span>`}
+          </div>
+
+          <div class="hours">
+            <strong>Today:</strong> ${todayLabel}
+            <span class="pill" style="border-color:${openNow?'#16a34a':'#ef4444'}">${openNow?'Open now':'Closed'}</span>
+            <details style="margin-top:6px">
+              <summary class="muted">View week</summary>
+              ${weekHtml(r.hours)}
+            </details>
+          </div>
+
+          ${noteVisible(r) ? `<div class="note"><strong>Note:</strong> ${escapeHtml(r.special_note)}</div>` : ``}
+
+          <div class="updated">Updated: ${sb.formatTime(r.updated_at)}</div>
+        </div>`;
+      }
+
+      function weekHtml(hours){
+        if (!hours) return `<div class="muted">No hours set</div>`;
+        const order = ['mon','tue','wed','thu','fri','sat','sun'];
+        const label = {mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
+        return `<div class="mono" style="margin-top:6px">
+          ${order.map(k=>{
+            const h = hours[k];
+            if (!h || h.closed) return `<div>${label[k]}: Closed</div>`;
+            const overnight = h.close && h.open && hmToMin(h.close) <= hmToMin(h.open);
+            return `<div>${label[k]}: ${h.open||'—'}–${h.close||'—'}${overnight?' (overnight)':''}</div>`;
+          }).join('')}
+        </div>`;
+      }
+
+      function escapeHtml(s){
+        return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+      }
+
+      function render(list){
+        roomsEl.innerHTML = "";
+        if (!list || !list.length){
+          statusEl.textContent = "No rooms yet.";
+          return;
+        }
+        statusEl.textContent = "";
+        roomsEl.innerHTML = list.map(cardHtml).join("");
+      }
+
+      async function load(){
+        const slug = new URLSearchParams(location.search).get('room')?.trim();
+        let q = sb.client.from('rooms')
+          .select('id,name,status,public_slug,updated_at,address_line1,address_line2,city,region,postal_code,country,phone_e164,timezone,hours,special_note,special_note_expires_at,map_query')
+          .order('name',{ascending:true});
+        if (slug) q = q.eq('public_slug', slug);
+        const { data, error } = await q;
+        if (error){ statusEl.textContent = "Error: "+error.message; return; }
+        render(data);
+      }
+
+      function subscribe(){
+        const slug = new URLSearchParams(location.search).get('room')?.trim();
+        sb.client
+          .channel('rooms_live_board_v2')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, (p)=>{
+            const r = p.new || p.old;
+            if (slug && r.public_slug !== slug) return;
+
+            if (p.eventType === 'DELETE'){
+              const n = roomsEl.querySelector(`[data-id="${r.id}"]`); if (n) n.remove();
+              if (!roomsEl.children.length) statusEl.textContent = slug ? "No matching room." : "No rooms yet.";
+              return;
+            }
+            if (p.eventType === 'INSERT'){
+              roomsEl.insertAdjacentHTML('beforeend', cardHtml(p.new));
+              statusEl.textContent = "";
+              return;
+            }
+            if (p.eventType === 'UPDATE'){
+              let n = roomsEl.querySelector(`[data-id="${r.id}"]`);
+              if (!n){ roomsEl.insertAdjacentHTML('beforeend', cardHtml(p.new)); statusEl.textContent=""; return; }
+              n.outerHTML = cardHtml(p.new);
+            }
+          })
+          .subscribe();
+      }
+
+      // boot
+      load();
+      subscribe();
+      setInterval(load, 25000);
+    })();
+  </script>
+</body>
+</html>
